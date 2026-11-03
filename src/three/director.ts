@@ -111,15 +111,16 @@ export function makePlan(m: Model, o: DirectorOptions): Plan {
 
   const frames: Frame[] = [];
   // chase camera for the play phase. Everything is smoothed in VIDEO time, so the time lapse
-  // cannot make it swing: heading from ±4 s of video, turning at most 18°/s, slow position and look-at.
+  // cannot make it swing. Calm by default (slow turns, small changes ignored), but the further the
+  // camera falls behind the direction of flight, the faster it catches up: fast time lapses with many
+  // turns would otherwise leave it looking sideways or backwards.
   const chase: Frame[] = [];
   let cam: [number, number, number] | null = null;
   let tgt: [number, number, number] | null = null;
-  const k = 1 - Math.exp(-1 / (2.2 * o.fps)); // position: time constant ≈ 2.2 s video
-  const kLook = 1 - Math.exp(-1 / (1.4 * o.fps));
-  const kHead = 1 - Math.exp(-1 / (3 * o.fps));
-  const maxTurn = ((18 * Math.PI) / 180) / o.fps;
-  const win = 4 * o.fps;
+  const smooth = (tau: number) => 1 - Math.exp(-1 / (tau * o.fps));
+  const k = smooth(2.2); // eased values (circling share)
+  const win = 2 * o.fps;
+  const DEG = Math.PI / 180;
   const fiOf = (f: number) => fiAt(Math.max(0, Math.min(playN - 1, f)) / (playN - 1));
   const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
   let heading: number | null = null;
@@ -128,7 +129,7 @@ export function makePlan(m: Model, o: DirectorOptions): Plan {
     const fi = fiAt(f / (playN - 1));
     const i = Math.round(fi);
     const p = pos(fi);
-    // direction of travel over ±4 s of video; while circling the old heading is kept
+    // direction of travel over ±2 s of video; while circling the old heading is kept
     const a0 = pos(fiOf(f - win));
     const a1 = pos(fiOf(f + win));
     const dx = a1[0] - a0[0];
@@ -137,8 +138,12 @@ export function makePlan(m: Model, o: DirectorOptions): Plan {
     if (heading == null) heading = Math.atan2(dx || 0, dz || -1);
     if (!circling && Math.hypot(dx, dz) > 200) {
       const d = wrap(Math.atan2(dx, dz) - heading);
-      // small wiggles are ignored, large changes are followed slowly
-      const want = Math.abs(d) < (12 * Math.PI) / 180 ? 0 : d * kHead;
+      const lag = Math.abs(d) / DEG;
+      // small wiggles are ignored; up to 35° behind: 18°/s and a 3 s time constant,
+      // beyond that the allowed turn rate rises to 70°/s and the time constant drops to 0.9 s
+      const over = Math.max(0, Math.min(1, (lag - 35) / 65));
+      const maxTurn = ((18 + 52 * over) * DEG) / o.fps;
+      const want = lag < 12 ? 0 : d * smooth(3 - 2.1 * over);
       heading += Math.max(-maxTurn, Math.min(maxTurn, want));
     }
     circ += ((circling ? 1 : 0) - circ) * k;
@@ -153,8 +158,13 @@ export function makePlan(m: Model, o: DirectorOptions): Plan {
     const look: [number, number, number] = [p[0] + hx * d * 0.1, p[1] - d * 0.32, p[2] + hz * d * 0.1];
     if (!cam || !tgt) { cam = want; tgt = look; }
     else {
-      cam = cam.map((c, j) => c + (want[j] - c) * k) as [number, number, number];
-      tgt = tgt.map((c, j) => c + (look[j] - c) * kLook) as [number, number, number];
+      // position and look-at catch up faster when they trail far behind (fast pilot in the time lapse)
+      const camGap = Math.hypot(want[0] - cam[0], want[2] - cam[2]) / d;
+      const tgtGap = Math.hypot(look[0] - tgt[0], look[2] - tgt[2]) / d;
+      const kCam = smooth(2.2 / (1 + 2 * camGap));
+      const kTgt = smooth(1.4 / (1 + 3 * tgtGap));
+      cam = cam.map((c, j) => c + (want[j] - c) * kCam) as [number, number, number];
+      tgt = tgt.map((c, j) => c + (look[j] - c) * kTgt) as [number, number, number];
       clampAbove(cam);
     }
     chase.push({ phase: 'play', fi, cam: [...cam], target: [...tgt], u: f / (playN - 1) });
