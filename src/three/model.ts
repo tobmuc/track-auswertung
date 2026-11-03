@@ -1,0 +1,160 @@
+import type { ActivityResult } from '../app/types';
+import type { Glide, Thermal, Wind } from '../core';
+import type { Terrain } from './terrain';
+
+/** Track in the local 3D frame plus derived values the scene, director and HUD share */
+export interface Model {
+  res: ActivityResult;
+  terrain: Terrain;
+  n: number;
+  x: Float64Array;
+  z: Float64Array;
+  /** altitude m MSL (not exaggerated) */
+  alt: Float64Array;
+  /** terrain mesh height under each point (m MSL) */
+  ground: Float64Array;
+  /** height above ground; from the precise ground profile when one is given, else from the mesh */
+  agl: Float64Array;
+  /** cumulative distance in km */
+  dist: Float64Array;
+  isHike: Uint8Array;
+  thermals: (Thermal & { idx: number; exitClimb: number })[];
+  glides: Glide[];
+  winds: Wind[];
+  launchIdx: number;
+  landingIdx: number;
+  /** unit direction of travel (x east, z south) per point */
+  hx: Float32Array;
+  hz: Float32Array;
+  /** bank angle in radians per point, positive = right turn */
+  bank: Float32Array;
+}
+
+export function buildModel(res: ActivityResult, terrain: Terrain, precise?: Float32Array): Model {
+  const tl = res.timeline;
+  const n = tl.t.length;
+  const x = new Float64Array(n);
+  const z = new Float64Array(n);
+  const ground = new Float64Array(n);
+  const dist = new Float64Array(n);
+  const isHike = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    [x[i], z[i]] = terrain.frame.toXZ(tl.lat[i], tl.lon[i]);
+    ground[i] = terrain.heightAt(x[i], z[i]);
+    isHike[i] = res.segments[tl.seg[i]].kind === 'hike' ? 1 : 0;
+    if (i > 0) dist[i] = dist[i - 1] + Math.hypot(x[i] - x[i - 1], z[i] - z[i - 1]) / 1000;
+  }
+  const alt = Float64Array.from(tl.alt);
+  // hike points are on the ground: avoid GPS altitude noise sinking them into the terrain
+  for (let i = 0; i < n; i++) if (isHike[i]) alt[i] = Math.max(alt[i], ground[i] + 2);
+  const agl = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    const g = precise?.length === n && precise[i] === precise[i] ? precise[i] : ground[i];
+    agl[i] = tl.alt[i] - g;
+  }
+
+  const thermals = res.segments
+    .flatMap((s) => s.thermals)
+    .map((t, idx) => {
+      // climb in the last 60 s before leaving the thermal — the "decision" value
+      let j = t.end;
+      while (j > t.start && tl.t[t.end] - tl.t[j] < 60_000) j--;
+      const dt = (tl.t[t.end] - tl.t[j]) / 1000;
+      return { ...t, idx, exitClimb: dt > 0 ? (tl.alt[t.end] - tl.alt[j]) / dt : t.avgClimb };
+    })
+    .sort((a, b) => a.start - b.start);
+
+  const flightSeg = res.segments.find((s) => s.kind === 'flight');
+  const { hx, hz, bank } = attitude(tl.t, x, z, tl.speed);
+  return {
+    hx,
+    hz,
+    bank,
+    res,
+    terrain,
+    n,
+    x,
+    z,
+    alt,
+    ground,
+    agl,
+    dist,
+    isHike,
+    thermals,
+    glides: res.segments.flatMap((s) => s.glides ?? []).sort((a, b) => a.start - b.start),
+    winds: res.flight?.winds ?? [],
+    launchIdx: flightSeg ? flightSeg.offset : 0,
+    landingIdx: flightSeg ? flightSeg.offset + flightSeg.length - 1 : n - 1,
+  };
+}
+
+/**
+ * Heading from positions ±3 s around each point; bank from the coordinated-turn relation
+ * tan(φ) = v·ω / g, smoothed over ±4 s and limited to ±55°.
+ */
+export function attitude(t: Float64Array, x: Float64Array, z: Float64Array, speedKmh: Float64Array) {
+  const n = t.length;
+  const hx = new Float32Array(n);
+  const hz = new Float32Array(n);
+  const yaw = new Float64Array(n);
+  let a = 0, b = 0;
+  let px = 0, pz = -1;
+  for (let i = 0; i < n; i++) {
+    while (t[i] - t[a] > 3000) a++;
+    while (b < n - 1 && t[b + 1] - t[i] <= 3000) b++;
+    const dx = x[b] - x[a];
+    const dz = z[b] - z[a];
+    const len = Math.hypot(dx, dz);
+    if (len > 3) { px = dx / len; pz = dz / len; }
+    hx[i] = px;
+    hz[i] = pz;
+    yaw[i] = Math.atan2(px, pz);
+  }
+  // unwrap yaw for the turn rate (compare raw angles; the unwrapped one may be many turns away)
+  let prevRaw = yaw[0];
+  for (let i = 1; i < n; i++) {
+    const raw = yaw[i];
+    let d = raw - prevRaw;
+    if (d > Math.PI) d -= 2 * Math.PI;
+    if (d < -Math.PI) d += 2 * Math.PI;
+    yaw[i] = yaw[i - 1] + d;
+    prevRaw = raw;
+  }
+  const raw = new Float64Array(n);
+  a = 0; b = 0;
+  for (let i = 0; i < n; i++) {
+    while (t[i] - t[a] > 2000) a++;
+    while (b < n - 1 && t[b + 1] - t[i] <= 2000) b++;
+    const dt = (t[b] - t[a]) / 1000;
+    const omega = dt > 0 ? (yaw[b] - yaw[a]) / dt : 0;
+    const v = speedKmh[i] / 3.6;
+    // compass-clockwise (right) turns decrease yaw = atan2(x, z) in this frame
+    raw[i] = Math.max(-0.96, Math.min(0.96, Math.atan((v * -omega) / 9.81)));
+  }
+  const bank = new Float32Array(n);
+  a = 0; b = 0;
+  let sum = 0;
+  for (let i = 0; i < n; i++) {
+    while (b < n && t[b] - t[i] <= 4000) sum += raw[b++];
+    while (t[i] - t[a] > 4000) sum -= raw[a++];
+    bank[i] = sum / (b - a);
+  }
+  return { hx, hz, bank };
+}
+
+/** Linear interpolation of a series at a fractional index */
+export function lerpAt(a: ArrayLike<number>, fi: number): number {
+  const i = Math.min(a.length - 1, Math.max(0, Math.floor(fi)));
+  const f = fi - i;
+  return i + 1 < a.length ? a[i] + (a[i + 1] - a[i]) * f : a[i];
+}
+
+/** Last measured wind at or before time t */
+export function windAt(m: Model, t: number): Wind | null {
+  let w: Wind | null = null;
+  for (const x of m.winds) {
+    if (x.t <= t) w = x;
+    else break;
+  }
+  return w;
+}

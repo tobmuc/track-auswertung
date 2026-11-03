@@ -1,0 +1,6 @@
+node_modules
+dist
+# eigene Tracks bleiben lokal
+fixtures/*.IGC
+fixtures/*.igc
+fixtures/*.gpx

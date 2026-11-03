@@ -1,0 +1,33 @@
+:root {
+  --bg: #0d1117;
+  --panel: #151b23;
+  --panel-2: #1c2430;
+  --line: #2a3441;
+  --text: #e6edf3;
+  --muted: #8b98a8;
+  --accent: #ff8a3d;
+  --accent-2: #4fc3f7;
+  --hike: #8bc34a;
+  --flight: #ff8a3d;
+  --radius: 12px;
+  font-family: Inter, 'Segoe UI', system-ui, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); }
+button, select, input { font: inherit; color: inherit; }
+button {
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;
+  padding: 6px 12px; cursor: pointer;
+}
+button:hover { border-color: var(--muted); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #1a0d03; font-weight: 600; }
+button.active { background: var(--accent); border-color: var(--accent); color: #1a0d03; }
+select, input[type=text] {
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px;
+}
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
+.muted { color: var(--muted); }
+.label { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+h1, h2, h3 { margin: 0; }
