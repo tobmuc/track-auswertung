@@ -291,4 +291,6 @@ const EN: Record<string, string> = {
   "Die Musik wird hier erzeugt und ist frei von Rechten Dritter (GEMA-frei). Bei eigenen Dateien bist du für die Rechte verantwortlich.": "The music is generated here and free of third-party rights. For your own files you are responsible for the rights.",
   // UI
   "Luftströmung in starken Thermiken und beim Steigen im Geradeausflug": "Air flow in strong thermals and when climbing in straight flight",
+  // UI
+  "Startsound beim Abheben": "Launch sound at take-off",
 };

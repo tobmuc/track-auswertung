@@ -19,6 +19,8 @@ export interface SoundOptions {
   climbThreshold: number;
   /** sink rate (m/s, negative) below which the sink tone sounds */
   sinkThreshold: number;
+  /** short rising chime at the moment of launch */
+  startPing: boolean;
   /** decoded own audio file, for music = 'file' */
   file?: AudioBuffer | null;
 }
@@ -232,6 +234,33 @@ function compose(ctx: BaseAudioContext, out: AudioNode, style: Exclude<MusicStyl
   }
 }
 
+/**
+ * Launch chime: three quick rising pings (a major triad going up an octave) with a soft bell tail,
+ * the classic "you are airborne" signal of flight instruments. Our own composition.
+ */
+function startPing(ctx: BaseAudioContext, out: AudioNode, t0: number, level: number) {
+  const notes = [84, 88, 91, 96]; // C6 E6 G6 C7
+  notes.forEach((n, k) => {
+    const t = t0 + k * 0.09;
+    const g = ctx.createGain();
+    g.connect(out);
+    const peak = level * (k === notes.length - 1 ? 1 : 0.75);
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(peak, t + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + (k === notes.length - 1 ? 0.9 : 0.16));
+    // bell-like: fundamental plus a slightly inharmonic overtone
+    for (const [mult, lv] of [[1, 1], [2.76, 0.18]] as const) {
+      const o = ctx.createOscillator();
+      o.frequency.value = midi(n) * mult;
+      const og = ctx.createGain();
+      og.gain.value = lv;
+      o.connect(og).connect(g);
+      o.start(t);
+      o.stop(t + 1);
+    }
+  });
+}
+
 /** Renders the complete soundtrack for the plan (stereo, 48 kHz) */
 export async function renderSoundtrack(m: Model, plan: Plan, o: SoundOptions): Promise<AudioBuffer> {
   const dur = plan.frames.length / plan.fps;
@@ -254,6 +283,12 @@ export async function renderSoundtrack(m: Model, plan: Plan, o: SoundOptions): P
     s.start(0);
   } else if (o.music !== 'none' && o.music !== 'file') {
     compose(ctx, music, o.music, dur);
+  }
+
+  if (o.startPing) {
+    // first video frame at which the pilot is airborne
+    const f = plan.frames.findIndex((fr) => fr.phase === 'play' && fr.fi >= m.launchIdx);
+    if (f >= 0) startPing(ctx, master, f / plan.fps, Math.min(0.5, 0.2 + 0.4 * o.varioVolume));
   }
 
   if (o.vario) {

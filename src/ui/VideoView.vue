@@ -53,6 +53,7 @@ const opt = reactive({
   musicVolume: 0.6,
   vario: true,
   varioVolume: 0.5,
+  startPing: true,
   climbThreshold: 0.2,
   sinkThreshold: -2.5,
   decisions: true,
@@ -218,11 +219,11 @@ let soundFile: AudioBuffer | null = null;
 const soundFileName = ref('');
 let track: { key: string; buf: Promise<AudioBuffer> } | null = null;
 const player = new SoundPlayer();
-const soundOn = computed(() => opt.vario || opt.music !== 'none');
+const soundOn = computed(() => opt.vario || opt.startPing || opt.music !== 'none');
 
 function soundtrack(): Promise<AudioBuffer> | null {
   if (!model || !plan.value || !soundOn.value) return null;
-  const key = JSON.stringify([planVersion, opt.music, opt.musicVolume, opt.vario, opt.varioVolume, opt.climbThreshold, opt.sinkThreshold, soundFileName.value]);
+  const key = JSON.stringify([planVersion, opt.music, opt.musicVolume, opt.vario, opt.varioVolume, opt.startPing, opt.climbThreshold, opt.sinkThreshold, soundFileName.value]);
   if (track?.key !== key) {
     track = {
       key,
@@ -233,6 +234,7 @@ function soundtrack(): Promise<AudioBuffer> | null {
         varioVolume: opt.varioVolume,
         climbThreshold: opt.climbThreshold,
         sinkThreshold: opt.sinkThreshold,
+        startPing: opt.startPing,
         file: soundFile,
       }),
     };
@@ -342,7 +344,7 @@ watch(() => [opt.hud, opt.decisions, opt.profile, opt.panelOpacity], () => {
 watch(() => [opt.format, fullscreen.value], () => requestAnimationFrame(resize));
 watch(frame, () => { if (!playing.value) draw(); });
 // changed sound settings while playing: re-render and continue at the current position
-watch(() => [opt.music, opt.musicVolume, opt.vario, opt.varioVolume, opt.climbThreshold, opt.sinkThreshold], () => {
+watch(() => [opt.music, opt.musicVolume, opt.vario, opt.varioVolume, opt.startPing, opt.climbThreshold, opt.sinkThreshold], () => {
   if (playing.value) void startSound();
   else player.stop();
 });
@@ -477,6 +479,7 @@ onUnmounted(() => {
           <label>{{ t('Lautstärke Musik') }}: {{ Math.round(opt.musicVolume * 100) }} %
             <input v-model.number="opt.musicVolume" type="range" min="0" max="1" step="0.05" :disabled="opt.music === 'none'" />
           </label>
+          <label class="check"><input v-model="opt.startPing" type="checkbox" /> {{ t('Startsound beim Abheben') }}</label>
           <label class="check"><input v-model="opt.vario" type="checkbox" /> {{ t('Vario-Töne nach Steigen und Sinken') }}</label>
           <label>{{ t('Lautstärke Vario') }}: {{ Math.round(opt.varioVolume * 100) }} %
             <input v-model.number="opt.varioVolume" type="range" min="0" max="1" step="0.05" :disabled="!opt.vario" />
