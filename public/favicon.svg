@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <!-- the canopy: an arched wing, cut into cells by the clip below -->
+    <clipPath id="wing">
+      <path d="M4 26 C10 8 54 8 60 26 C55 21 9 21 4 26 Z" />
+    </clipPath>
+  </defs>
+  <!-- lines -->
+  <g stroke="#5b6573" stroke-width="1.3" stroke-linecap="round" fill="none">
+    <path d="M6 25 L30 49" />
+    <path d="M18 20.5 L31 49" />
+    <path d="M32 19.5 L32 49" />
+    <path d="M46 20.5 L33 49" />
+    <path d="M58 25 L34 49" />
+  </g>
+  <!-- canopy cells -->
+  <g clip-path="url(#wing)">
+    <rect x="0" y="0" width="13" height="30" fill="#e53935" />
+    <rect x="13" y="0" width="13" height="30" fill="#ff9800" />
+    <rect x="26" y="0" width="12" height="30" fill="#fdd835" />
+    <rect x="38" y="0" width="13" height="30" fill="#43a047" />
+    <rect x="51" y="0" width="13" height="30" fill="#1e88e5" />
+  </g>
+  <path d="M4 26 C10 8 54 8 60 26 C55 21 9 21 4 26 Z" fill="none" stroke="#263238" stroke-width="1.6" stroke-linejoin="round" />
+  <!-- pilot in the harness -->
+  <circle cx="32" cy="50" r="3.4" fill="#1e88e5" stroke="#263238" stroke-width="1.2" />
+  <path d="M27.5 54 Q32 52 36.5 54 L35 60 Q32 61.5 29 60 Z" fill="#ff7a1a" stroke="#263238" stroke-width="1.2" stroke-linejoin="round" />
+</svg>
