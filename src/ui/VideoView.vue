@@ -4,12 +4,14 @@ import { analyzeRecord } from '../app/analysis';
 import { db } from '../app/db';
 import { groundProfile, type GroundProfile } from '../app/ground';
 import { i18n, t } from '../app/i18n';
+import { loadPois, selectPois, type Poi } from '../app/pois';
 import type { ActivityRecord, ActivityResult } from '../app/types';
 import { makePlan, type Plan } from '../three/director';
 import { buildModel, type Model } from '../three/model';
 import { canEncodeVideo, exportMp4, FrameRenderer } from '../three/render';
 import { FlightScene } from '../three/scene';
 import GliderPreview from './GliderPreview.vue';
+import { decodeAudioFile, renderSoundtrack, SoundPlayer, type MusicStyle } from '../three/audio';
 import { GLIDER_PRESETS, gliderChoice, PATTERN_LABEL, resetDesign, type GliderPresetId } from '../three/gliderDesigns';
 import { loadTerrain, loadTexture, MAP_SOURCES, paddedBounds, type MapSourceId, type Terrain, type TerrainTexture } from '../three/terrain';
 
@@ -22,6 +24,9 @@ const terrain = shallowRef<Terrain | null>(null);
 const progress = ref<{ label: string; done: number; total: number } | null>({ label: 'Analysiere Track', done: 0, total: 0 });
 const error = ref('');
 const ground = shallowRef<GroundProfile | null>(null);
+/** selected POIs in the local frame; empty until loaded */
+let pois: (Poi & { x: number; z: number; ground: number })[] = [];
+const poiStatus = ref('');
 
 const opt = reactive({
   format: '9:16' as '9:16' | '16:9',
@@ -38,7 +43,18 @@ const opt = reactive({
   curtain: true,
   wind: true,
   contours: false,
+  pois: true,
+  particles: true,
+  pilotStyle: 'glider' as 'glider' | 'firefly' | 'both',
   hud: true,
+  panelOpacity: 0.72,
+  windOpacity: 0.6,
+  music: 'cinematic' as MusicStyle,
+  musicVolume: 0.6,
+  vario: true,
+  varioVolume: 0.5,
+  climbThreshold: 0.2,
+  sinkThreshold: -2.5,
   decisions: true,
   profile: true,
 });
@@ -82,11 +98,39 @@ onMounted(async () => {
     }
     model = buildModel(res.value, terrain.value, ground.value?.ground);
     await applyTexture();
+    // POIs come from the internet and may be slow: the scene is rebuilt once they arrive
+    loadPoisFor();
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e);
     progress.value = null;
   }
 });
+
+let poiToken = 0;
+async function loadPoisFor() {
+  const T = terrain.value;
+  const m = model;
+  if (!T || !m) return;
+  const token = ++poiToken;
+  poiStatus.value = t('Lade Orte und Gipfel …');
+  try {
+    const raw = await loadPois(T.bounds, i18n.lang);
+    if (token !== poiToken) return;
+    const local = raw
+      .map((p) => {
+        const [x, z] = T.frame.toXZ(p.lat, p.lon);
+        return { ...p, x, z, ground: T.heightAt(x, z) };
+      })
+      .filter((p) => p.x > T.minX && p.x < T.maxX && p.z > T.minZ && p.z < T.maxZ);
+    const track: { x: number; z: number }[] = [];
+    for (let i = 0; i < m.n; i += Math.max(1, Math.floor(m.n / 400))) track.push({ x: m.x[i], z: m.z[i] });
+    pois = selectPois(local, track, Math.max(T.maxX - T.minX, T.maxZ - T.minZ));
+    poiStatus.value = `${pois.length} ${t('von')} ${raw.length} ${t('Orten (Wikidata / OpenStreetMap)')}`;
+    rebuildScene();
+  } catch (e) {
+    if (token === poiToken) poiStatus.value = `${t('Orte nicht verfügbar')}: ${e instanceof Error ? e.message : e}`;
+  }
+}
 
 /** Loaded map textures per source, so switching back is instant */
 const textures = new Map<MapSourceId, TerrainTexture>();
@@ -118,7 +162,10 @@ function rebuildScene() {
     exaggeration: opt.exaggeration,
     gliderSize: opt.gliderSize,
     glider: { ...gliderChoice.designs[gliderChoice.preset] },
-    layers: { thermals: opt.thermals, drift: opt.drift, glides: opt.glides, curtain: opt.curtain, wind: opt.wind, contours: opt.contours || opt.texture === 'relief' },
+    pilotStyle: opt.pilotStyle,
+    windOpacity: opt.windOpacity,
+    pois,
+    layers: { thermals: opt.thermals, drift: opt.drift, glides: opt.glides, curtain: opt.curtain, wind: opt.wind, contours: opt.contours || opt.texture === 'relief', pois: opt.pois, particles: opt.particles },
   });
   rebuildPlan();
 }
@@ -135,13 +182,14 @@ function rebuildPlan() {
     aspect: opt.format === '9:16' ? 9 / 16 : 16 / 9,
   });
   frame.value = Math.round(keepU * (plan.value.frames.length - 1));
+  planVersion++;
   preview?.dispose();
   preview = new FrameRenderer(scene, model, plan.value, hudOpts(), canvas.value);
   resize();
 }
 
 function hudOpts() {
-  return { title: rec.value?.title ?? '', enabled: opt.hud, decisions: opt.decisions, profile: opt.profile };
+  return { title: rec.value?.title ?? '', enabled: opt.hud, decisions: opt.decisions, profile: opt.profile, panelOpacity: opt.panelOpacity };
 }
 
 function resize() {
@@ -164,6 +212,58 @@ function draw() {
   if (preview && !exporting.value) preview.render(frame.value);
 }
 
+// --- soundtrack: rendered offline per plan and sound settings, played in sync with the preview
+let planVersion = 0;
+let soundFile: AudioBuffer | null = null;
+const soundFileName = ref('');
+let track: { key: string; buf: Promise<AudioBuffer> } | null = null;
+const player = new SoundPlayer();
+const soundOn = computed(() => opt.vario || opt.music !== 'none');
+
+function soundtrack(): Promise<AudioBuffer> | null {
+  if (!model || !plan.value || !soundOn.value) return null;
+  const key = JSON.stringify([planVersion, opt.music, opt.musicVolume, opt.vario, opt.varioVolume, opt.climbThreshold, opt.sinkThreshold, soundFileName.value]);
+  if (track?.key !== key) {
+    track = {
+      key,
+      buf: renderSoundtrack(model, plan.value, {
+        music: opt.music,
+        musicVolume: opt.musicVolume,
+        vario: opt.vario,
+        varioVolume: opt.varioVolume,
+        climbThreshold: opt.climbThreshold,
+        sinkThreshold: opt.sinkThreshold,
+        file: soundFile,
+      }),
+    };
+  }
+  return track.buf;
+}
+
+async function startSound() {
+  const p = soundtrack();
+  if (!p) return;
+  const buf = await p;
+  if (playing.value) player.play(buf, frame.value / FPS);
+}
+
+async function pickSoundFile(list: FileList | null) {
+  const f = list?.[0];
+  if (!f) return;
+  try {
+    soundFile = await decodeAudioFile(f);
+    soundFileName.value = f.name;
+    opt.music = 'file';
+  } catch (e) {
+    error.value = `${t('Audiodatei nicht lesbar')}: ${e instanceof Error ? e.message : e}`;
+  }
+}
+
+/** Slider moved: keep the sound in sync while playing */
+function onSeek() {
+  if (playing.value) void startSound();
+}
+
 let raf = 0;
 let lastTs = 0;
 function loop(ts: number) {
@@ -171,7 +271,10 @@ function loop(ts: number) {
   if (lastTs) {
     const adv = ((ts - lastTs) / 1000) * FPS;
     frame.value = Math.min(plan.value.frames.length - 1, frame.value + adv);
-    if (frame.value >= plan.value.frames.length - 1) playing.value = false;
+    if (frame.value >= plan.value.frames.length - 1) {
+      playing.value = false;
+      player.stop();
+    }
   }
   lastTs = ts;
   draw();
@@ -182,12 +285,16 @@ function togglePlay() {
   if (!playing.value && frame.value >= plan.value.frames.length - 1) frame.value = 0;
   playing.value = !playing.value;
   lastTs = 0;
-  if (playing.value) raf = requestAnimationFrame(loop);
+  if (playing.value) {
+    raf = requestAnimationFrame(loop);
+    void startSound();
+  } else player.stop();
 }
 
 async function startExport() {
   if (!scene || !model || !plan.value || !preview) return;
   playing.value = false;
+  player.stop();
   exporting.value = true;
   if (videoUrl.value) URL.revokeObjectURL(videoUrl.value);
   videoUrl.value = '';
@@ -197,7 +304,9 @@ async function startExport() {
   r.hud = hudOpts();
   try {
     const { w, h } = exportSize.value;
-    const blob = await exportMp4(r, w, h, (done, total) => (progress.value = { label: 'Rendere Video', done, total }), abort.signal);
+    progress.value = { label: 'Erzeuge Tonspur', done: 0, total: 0 };
+    const audio = await soundtrack();
+    const blob = await exportMp4(r, w, h, (done, total) => (progress.value = { label: 'Rendere Video', done, total }), abort.signal, audio);
     videoUrl.value = URL.createObjectURL(blob);
   } catch (e) {
     if ((e as DOMException).name !== 'AbortError') error.value = e instanceof Error ? e.message : String(e);
@@ -224,21 +333,30 @@ watch(gliderChoice, () => {
   clearTimeout(gliderTimer);
   gliderTimer = window.setTimeout(rebuildScene, 150);
 }, { deep: true });
-watch(() => [opt.exaggeration, opt.thermals, opt.drift, opt.glides, opt.curtain, opt.wind, opt.contours, opt.gliderSize], rebuildScene);
+watch(() => [opt.exaggeration, opt.windOpacity, opt.particles, opt.thermals, opt.drift, opt.glides, opt.pois, opt.pilotStyle, opt.curtain, opt.wind, opt.contours, opt.gliderSize], rebuildScene);
 watch(() => [opt.durationS, opt.highlights, opt.camDistance, opt.format], rebuildPlan);
-watch(() => [opt.hud, opt.decisions, opt.profile], () => {
+watch(() => [opt.hud, opt.decisions, opt.profile, opt.panelOpacity], () => {
   if (preview) preview.hud = hudOpts();
   draw();
 });
 watch(() => [opt.format, fullscreen.value], () => requestAnimationFrame(resize));
 watch(frame, () => { if (!playing.value) draw(); });
-// scene labels are baked into textures: rebuild them in the new language
-watch(() => i18n.lang, rebuildScene);
+// changed sound settings while playing: re-render and continue at the current position
+watch(() => [opt.music, opt.musicVolume, opt.vario, opt.varioVolume, opt.climbThreshold, opt.sinkThreshold], () => {
+  if (playing.value) void startSound();
+  else player.stop();
+});
+// scene labels are baked into textures: rebuild them in the new language (POI names too)
+watch(() => i18n.lang, () => {
+  rebuildScene();
+  loadPoisFor();
+});
 const onResize = () => resize();
 onMounted(() => window.addEventListener('resize', onResize));
 onUnmounted(() => {
   window.removeEventListener('resize', onResize);
   cancelAnimationFrame(raf);
+  player.dispose();
   abort?.abort();
   preview?.dispose();
   scene?.dispose();
@@ -265,7 +383,7 @@ onUnmounted(() => {
         <canvas ref="canvas" class="preview" :class="{ hidden: !plan }" />
         <div v-if="plan" class="transport">
           <button class="primary" :disabled="exporting" @click="togglePlay">{{ playing ? t('Anhalten') : t('Abspielen') }}</button>
-          <input v-model.number="frame" type="range" min="0" :max="plan.frames.length - 1" step="1" :disabled="exporting" />
+          <input v-model.number="frame" type="range" min="0" :max="plan.frames.length - 1" step="1" :disabled="exporting" @input="onSeek" />
           <span class="muted time">{{ timeLabel }}</span>
           <button @click="fullscreen = !fullscreen">{{ fullscreen ? t('Schliessen') : t('Vollbild') }}</button>
         </div>
@@ -312,6 +430,13 @@ onUnmounted(() => {
         <fieldset>
           <legend>{{ t('Schirm') }}</legend>
           <GliderPreview :design="design" />
+          <label>{{ t('Darstellung im Flug') }}
+            <select v-model="opt.pilotStyle" :disabled="exporting">
+              <option value="glider">{{ t('Gleitschirm-Modell') }}</option>
+              <option value="firefly">{{ t('Glühwürmchen (Lichtpunkt mit Leuchtspur)') }}</option>
+              <option value="both">{{ t('Beides') }}</option>
+            </select>
+          </label>
           <label>{{ t('Modell') }}
             <select v-model="gliderChoice.preset" :disabled="exporting">
               <option v-for="(d, k) in GLIDER_PRESETS" :key="k" :value="k as GliderPresetId">{{ t(d.name) }}</option>
@@ -336,16 +461,54 @@ onUnmounted(() => {
             <button class="link" @click="resetDesign(gliderChoice.preset)">{{ t('zurücksetzen') }}</button></p>
         </fieldset>
         <fieldset>
+          <legend>{{ t('Ton') }}</legend>
+          <label>{{ t('Musik') }}
+            <select v-model="opt.music" :disabled="exporting">
+              <option value="none">{{ t('Keine') }}</option>
+              <option value="ambient">{{ t('Ambient (ruhig, Flächen)') }}</option>
+              <option value="cinematic">{{ t('Cinematic (Puls, steigert sich)') }}</option>
+              <option value="chill">{{ t('Chill (E-Piano, Beat)') }}</option>
+              <option value="file" :disabled="!soundFileName">{{ t('Eigene Datei') }}{{ soundFileName ? `: ${soundFileName}` : '' }}</option>
+            </select>
+          </label>
+          <label>{{ t('Eigene Musikdatei (mp3, wav, ogg)') }}
+            <input type="file" accept="audio/*" @change="pickSoundFile(($event.target as HTMLInputElement).files)" />
+          </label>
+          <label>{{ t('Lautstärke Musik') }}: {{ Math.round(opt.musicVolume * 100) }} %
+            <input v-model.number="opt.musicVolume" type="range" min="0" max="1" step="0.05" :disabled="opt.music === 'none'" />
+          </label>
+          <label class="check"><input v-model="opt.vario" type="checkbox" /> {{ t('Vario-Töne nach Steigen und Sinken') }}</label>
+          <label>{{ t('Lautstärke Vario') }}: {{ Math.round(opt.varioVolume * 100) }} %
+            <input v-model.number="opt.varioVolume" type="range" min="0" max="1" step="0.05" :disabled="!opt.vario" />
+          </label>
+          <label>{{ t('Piepsen ab') }}: +{{ opt.climbThreshold.toFixed(1) }} m/s · {{ t('Sinkton ab') }}: {{ opt.sinkThreshold.toFixed(1) }} m/s
+            <span class="pair">
+              <input v-model.number="opt.climbThreshold" type="range" min="0" max="1" step="0.1" :disabled="!opt.vario" />
+              <input v-model.number="opt.sinkThreshold" type="range" min="-5" max="-1" step="0.5" :disabled="!opt.vario" />
+            </span>
+          </label>
+          <p class="muted small">{{ t('Die Musik wird hier erzeugt und ist frei von Rechten Dritter (GEMA-frei). Bei eigenen Dateien bist du für die Rechte verantwortlich.') }}</p>
+        </fieldset>
+        <fieldset>
           <legend>{{ t('Lern-Ebenen') }}</legend>
           <label class="check"><input v-model="opt.thermals" type="checkbox" /> {{ t('Thermiktrichter mit Steigwert') }}</label>
           <label class="check"><input v-model="opt.drift" type="checkbox" :disabled="!opt.thermals" /> {{ t('Trichter-Versatz durch Wind (Drift der Kreismittelpunkte)') }}</label>
           <label class="check"><input v-model="opt.glides" type="checkbox" /> {{ t('Gleitzahl auf Gleitstrecken (ab 2 km)') }}</label>
+          <label class="check"><input v-model="opt.particles" type="checkbox" /> {{ t('Luftströmung in starken Thermiken und beim Steigen im Geradeausflug') }}</label>
+          <label class="check"><input v-model="opt.pois" type="checkbox" /> {{ t('Gipfel, Hütten und Orte mit Infotafel') }}</label>
+          <p v-if="opt.pois && poiStatus" class="muted small">{{ poiStatus }}</p>
           <label class="check"><input v-model="opt.curtain" type="checkbox" /> {{ t('Höhe über Grund (rot < 150 m)') }}</label>
           <p v-if="ground" class="muted small">{{ t('Höhe über Grund') }}: {{ ground.label }} ({{ t('Quelle im Dashboard wählbar') }})</p>
           <label class="check"><input v-model="opt.wind" type="checkbox" /> {{ t('Windpfeil aus der Drift') }}</label>
           <label class="check"><input v-model="opt.decisions" type="checkbox" /> {{ t('Entscheidungen (Thermik verlassen, Suche)') }}</label>
           <label class="check"><input v-model="opt.hud" type="checkbox" /> {{ t('Einblendungen (Daten, Windrose)') }}</label>
           <label class="check"><input v-model="opt.profile" type="checkbox" :disabled="!opt.hud" /> {{ t('Höhenprofil im Bild') }}</label>
+          <label>{{ t('Deckkraft Einblendungen') }}: {{ Math.round(opt.panelOpacity * 100) }} %
+            <input v-model.number="opt.panelOpacity" type="range" min="0" max="1" step="0.05" :disabled="!opt.hud" />
+          </label>
+          <label>{{ t('Deckkraft Windpfeil') }}: {{ Math.round(opt.windOpacity * 100) }} %
+            <input v-model.number="opt.windOpacity" type="range" min="0.1" max="1" step="0.05" :disabled="!opt.wind" />
+          </label>
         </fieldset>
         <button class="primary big" :disabled="!plan || exporting || !encodeOk" @click="startExport">
           {{ exporting ? t('Video wird erstellt …') : `${t('Video erstellen')} (${exportSize.w}×${exportSize.h})` }}
@@ -384,6 +547,8 @@ label input[type=range] { accent-color: var(--accent); }
 .seg { display: flex; gap: 6px; }
 .seg button { flex: 1; font-size: 13px; }
 .big { padding: 12px; font-size: 15px; }
+.pair { display: flex; gap: 8px; }
+.pair input { flex: 1; min-width: 0; }
 .colors { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .colors label { font-size: 12px; color: var(--muted); }
 .colors input[type=color] { width: 100%; height: 28px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: none; cursor: pointer; }

@@ -31,7 +31,7 @@ export class FrameRenderer {
     const w = this.out.width;
     const h = this.out.height;
     const n = Math.min(this.plan.frames.length - 1, Math.max(0, Math.round(frameNo)));
-    this.scene.update(this.plan.frames[n], w, h);
+    this.scene.update(this.plan.frames[n], w, h, { frameNo: n, plan: this.plan });
     this.gl.render(this.scene.scene, this.scene.camera);
     this.ctx.drawImage(this.gl.domElement, 0, 0, w, h);
     drawHud(this.ctx, w, h, this.m, this.plan, n, this.hud);
@@ -40,6 +40,39 @@ export class FrameRenderer {
   dispose() {
     this.gl.dispose();
   }
+}
+
+/** AAC if the browser can encode it, else Opus (both are valid in MP4); null = export without sound */
+async function pickAudioCodec(a: AudioBuffer): Promise<{ codec: string; mux: 'aac' | 'opus' } | null> {
+  if (typeof AudioEncoder === 'undefined') return null;
+  for (const [codec, mux] of [['mp4a.40.2', 'aac'], ['opus', 'opus']] as const) {
+    const s = await AudioEncoder.isConfigSupported({ codec, sampleRate: a.sampleRate, numberOfChannels: a.numberOfChannels, bitrate: 160_000 });
+    if (s.supported) return { codec, mux };
+  }
+  return null;
+}
+
+/** Encodes the whole soundtrack in 100 ms chunks */
+async function encodeAudio(a: AudioBuffer, codec: string, muxer: Muxer<ArrayBufferTarget>) {
+  let failure: Error | null = null;
+  const enc = new AudioEncoder({
+    output: (chunk, meta) => muxer.addAudioChunk(chunk, meta),
+    error: (e) => (failure = e as Error),
+  });
+  enc.configure({ codec, sampleRate: a.sampleRate, numberOfChannels: a.numberOfChannels, bitrate: 160_000 });
+  const ch = a.numberOfChannels;
+  const step = Math.round(a.sampleRate / 10);
+  for (let off = 0; off < a.length; off += step) {
+    const n = Math.min(step, a.length - off);
+    const planar = new Float32Array(n * ch);
+    for (let c = 0; c < ch; c++) planar.set(a.getChannelData(c).subarray(off, off + n), c * n);
+    const data = new AudioData({ format: 'f32-planar', sampleRate: a.sampleRate, numberOfFrames: n, numberOfChannels: ch, timestamp: Math.round((off / a.sampleRate) * 1e6), data: planar });
+    enc.encode(data);
+    data.close();
+  }
+  await enc.flush();
+  enc.close();
+  if (failure) throw failure;
 }
 
 export function canEncodeVideo(): boolean {
@@ -53,6 +86,7 @@ export async function exportMp4(
   height: number,
   onProgress: (done: number, total: number) => void,
   signal?: AbortSignal,
+  audio?: AudioBuffer | null,
 ): Promise<Blob> {
   const fps = r.plan.fps;
   const total = r.plan.frames.length;
@@ -64,12 +98,15 @@ export async function exportMp4(
   }
   if (!codec) throw new Error(`Dein Browser kann kein H.264 in ${width}×${height} kodieren.`);
 
+  const audioCodec = audio ? await pickAudioCodec(audio) : null;
   const muxer = new Muxer({
     target: new ArrayBufferTarget(),
     video: { codec: 'avc', width, height, frameRate: fps },
+    ...(audio && audioCodec ? { audio: { codec: audioCodec.mux, numberOfChannels: audio.numberOfChannels, sampleRate: audio.sampleRate } } : {}),
     fastStart: 'in-memory',
   });
   let failure: Error | null = null;
+  if (audio && audioCodec) await encodeAudio(audio, audioCodec.codec, muxer);
   const enc = new VideoEncoder({
     output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
     error: (e) => (failure = e as Error),

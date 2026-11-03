@@ -81,24 +81,7 @@ export function makePlan(m: Model, o: DirectorOptions): Plan {
     return lo - 1 + (span > 0 ? (target - w[lo - 1]) / span : 0);
   };
 
-  // --- smoothed travel direction per index; frozen while circling
-  const dirX = new Float64Array(n);
-  const dirZ = new Float64Array(n);
-  let a = 0, b = 0;
-  let px = 0, pz = -1;
   const mode = m.res.timeline.mode;
-  for (let i = 0; i < n; i++) {
-    while (t[i] - t[a] > 25_000) a++;
-    while (b < n - 1 && t[b + 1] - t[i] <= 25_000) b++;
-    if (mode[i] !== 4) {
-      const dx = m.x[b] - m.x[a];
-      const dz = m.z[b] - m.z[a];
-      const len = Math.hypot(dx, dz);
-      if (len > 50) { px = dx / len; pz = dz / len; }
-    }
-    dirX[i] = px;
-    dirZ[i] = pz;
-  }
 
   const ext = Math.max(m.terrain.maxX - m.terrain.minX, m.terrain.maxZ - m.terrain.minZ);
   const baseDist = Math.min(4500, Math.max(700, ext * 0.05)) * o.camDistance;
@@ -127,19 +110,41 @@ export function makePlan(m: Model, o: DirectorOptions): Plan {
   };
 
   const frames: Frame[] = [];
-  // chase camera for the play phase, smoothed over video frames
+  // chase camera for the play phase. Everything is smoothed in VIDEO time, so the time lapse
+  // cannot make it swing: heading from ±4 s of video, turning at most 18°/s, slow position and look-at.
   const chase: Frame[] = [];
   let cam: [number, number, number] | null = null;
   let tgt: [number, number, number] | null = null;
-  const k = 1 - Math.exp(-1 / (1.2 * o.fps)); // time constant ≈ 1.2 s video
+  const k = 1 - Math.exp(-1 / (2.2 * o.fps)); // position: time constant ≈ 2.2 s video
+  const kLook = 1 - Math.exp(-1 / (1.4 * o.fps));
+  const kHead = 1 - Math.exp(-1 / (3 * o.fps));
+  const maxTurn = ((18 * Math.PI) / 180) / o.fps;
+  const win = 4 * o.fps;
+  const fiOf = (f: number) => fiAt(Math.max(0, Math.min(playN - 1, f)) / (playN - 1));
+  const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+  let heading: number | null = null;
+  let circ = 0; // 0..1, eased share of circling
   for (let f = 0; f < playN; f++) {
     const fi = fiAt(f / (playN - 1));
     const i = Math.round(fi);
     const p = pos(fi);
+    // direction of travel over ±4 s of video; while circling the old heading is kept
+    const a0 = pos(fiOf(f - win));
+    const a1 = pos(fiOf(f + win));
+    const dx = a1[0] - a0[0];
+    const dz = a1[2] - a0[2];
     const circling = mode[i] === 4;
-    const d = baseDist * (circling ? 1.35 : 1);
-    const side = circling ? 0.55 : 0.2;
-    const hx = dirX[i], hz = dirZ[i];
+    if (heading == null) heading = Math.atan2(dx || 0, dz || -1);
+    if (!circling && Math.hypot(dx, dz) > 200) {
+      const d = wrap(Math.atan2(dx, dz) - heading);
+      // small wiggles are ignored, large changes are followed slowly
+      const want = Math.abs(d) < (12 * Math.PI) / 180 ? 0 : d * kHead;
+      heading += Math.max(-maxTurn, Math.min(maxTurn, want));
+    }
+    circ += ((circling ? 1 : 0) - circ) * k;
+    const d = baseDist * (1 + 0.25 * circ);
+    const side = 0.3 + 0.1 * circ;
+    const hx = Math.sin(heading), hz = Math.cos(heading);
     const want: [number, number, number] = clearView(clampAbove([
       p[0] - hx * d + -hz * d * side,
       p[1] + d * 0.7,
@@ -149,7 +154,7 @@ export function makePlan(m: Model, o: DirectorOptions): Plan {
     if (!cam || !tgt) { cam = want; tgt = look; }
     else {
       cam = cam.map((c, j) => c + (want[j] - c) * k) as [number, number, number];
-      tgt = tgt.map((c, j) => c + (look[j] - c) * Math.min(1, k * 2.5)) as [number, number, number];
+      tgt = tgt.map((c, j) => c + (look[j] - c) * kLook) as [number, number, number];
       clampAbove(cam);
     }
     chase.push({ phase: 'play', fi, cam: [...cam], target: [...tgt], u: f / (playN - 1) });

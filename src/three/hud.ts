@@ -10,12 +10,17 @@ export interface HudOptions {
   enabled: boolean;
   decisions: boolean;
   profile: boolean;
+  /** opacity of the dark panels behind the overlays, 0..1 */
+  panelOpacity: number;
 }
 
 const ACCENT = '#ff8a3d';
 
+/** set per frame from HudOptions.panelOpacity */
+let panelAlpha = 0.72;
+
 function panel(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
-  g.fillStyle = 'rgba(13,17,23,.72)';
+  g.fillStyle = `rgba(13,17,23,${panelAlpha})`;
   g.beginPath();
   g.roundRect(x, y, w, h, r);
   g.fill();
@@ -54,6 +59,7 @@ function profileImage(m: Model, w: number, h: number): OffscreenCanvas {
 
 export function drawHud(g: CanvasRenderingContext2D, W: number, H: number, m: Model, plan: Plan, frameNo: number, o: HudOptions) {
   if (!o.enabled) return;
+  panelAlpha = o.panelOpacity;
   const fr: Frame = plan.frames[frameNo];
   const S = Math.min(W, H) / 1080; // scale relative to 1080p short side
   const pad = 40 * S;

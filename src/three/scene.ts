@@ -3,12 +3,14 @@ import { Line2 } from 'three/examples/jsm/lines/Line2.js';
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { VARIO_STOPS } from '../app/colors';
-import type { Frame } from './director';
+import type { Frame, Plan } from './director';
 import { lerpAt, windAt, type Model } from './model';
 import { sunPosition } from './sun';
 import type { TerrainTexture } from './terrain';
 import { buildGlider, GLIDER_SPAN } from './glider';
 import type { GliderDesign } from './gliderDesigns';
+import type { Poi } from '../app/pois';
+import { LiftParticles } from './particles';
 import { compass } from '../core/geo';
 import { t } from '../app/i18n';
 
@@ -16,10 +18,16 @@ export interface SceneOptions {
   /** draped map, or null for the plaster relief */
   texture: TerrainTexture | null;
   exaggeration: number;
-  layers: { thermals: boolean; drift: boolean; glides: boolean; curtain: boolean; wind: boolean; contours: boolean };
+  /** opacity of the 3D wind arrow, 0..1 */
+  windOpacity: number;
+  layers: { thermals: boolean; drift: boolean; glides: boolean; curtain: boolean; wind: boolean; contours: boolean; pois: boolean; particles: boolean };
   /** Glider size on screen (1 = span ≈ 5 % of the camera distance; never below real size) */
   gliderSize: number;
   glider: GliderDesign;
+  /** how the pilot is shown in flight */
+  pilotStyle: 'glider' | 'firefly' | 'both';
+  /** selected POIs with local position and terrain height */
+  pois: (Poi & { x: number; z: number; ground: number })[];
 }
 
 const LOW_AGL = 150;
@@ -95,6 +103,58 @@ function thermalAxis(core: { x: number; z: number; alt: number }[], x0: number, 
   };
 }
 
+type Ctx2D = CanvasRenderingContext2D & { letterSpacing: string };
+
+/** Map-style POI caption: spaced capitals, elevation below, no box; anchored at its bottom centre */
+function poiSprite(name: string, ele: number): THREE.Sprite {
+  const scale = 2;
+  const c = document.createElement('canvas');
+  const g = c.getContext('2d') as Ctx2D;
+  const big = '400 30px system-ui, sans-serif';
+  const small = '400 21px system-ui, sans-serif';
+  const title = name.toUpperCase();
+  const sub = `${Math.round(ele)} M`;
+  g.font = big;
+  g.letterSpacing = '3px';
+  const w = Math.ceil(Math.max(g.measureText(title).width, 120)) + 24;
+  c.width = w * scale;
+  c.height = 84 * scale;
+  g.scale(scale, scale);
+  g.textAlign = 'center';
+  g.shadowColor = 'rgba(0,0,0,.55)';
+  g.shadowBlur = 6;
+  g.fillStyle = '#ffffff';
+  g.font = big;
+  g.letterSpacing = '3px';
+  g.fillText(title, w / 2, 32);
+  g.fillStyle = 'rgba(255,255,255,.85)';
+  g.font = small;
+  g.letterSpacing = '2px';
+  g.fillText(sub, w / 2, 60);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
+  sp.center.set(0.5, 0);
+  sp.userData.aspect = c.width / c.height;
+  sp.renderOrder = 9;
+  return sp;
+}
+
+/** Soft round glow for the firefly */
+function glowTexture(): THREE.CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d')!;
+  const grd = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  grd.addColorStop(0, 'rgba(255,255,255,1)');
+  grd.addColorStop(0.12, 'rgba(255,250,225,.95)');
+  grd.addColorStop(0.35, 'rgba(255,235,170,.35)');
+  grd.addColorStop(1, 'rgba(255,220,140,0)');
+  g.fillStyle = grd;
+  g.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(c);
+}
+
 function labelSprite(lines: string[], color: string): THREE.Sprite {
   const c = document.createElement('canvas');
   const scale = 2;
@@ -132,7 +192,16 @@ export class FlightScene {
   private dropLine: THREE.Line;
   private thermalObjs: { group: THREE.Group; label: THREE.Sprite; start: number; top: number }[] = [];
   private glideLabels: { label: THREE.Sprite; end: number }[] = [];
+  private poiObjs: { label: THREE.Sprite; stick: THREE.Line; top: THREE.Vector3 }[] = [];
+  private firefly: THREE.Sprite;
+  private particles: LiftParticles | null = null;
+  private trailCore: Line2;
+  private trailHalo: Line2;
+  private trailCoreMat: LineMaterial;
+  private trailHaloMat: LineMaterial;
   private windArrow: THREE.ArrowHelper;
+  /** attitude smoothed over video frames (the time lapse would otherwise make it jump) */
+  private att = { frame: -10, roll: 0, pitch: 0 };
   private ext: number;
 
   constructor(private m: Model, private o: SceneOptions) {
@@ -313,6 +382,44 @@ export class FlightScene {
       }
     }
 
+    // --- POIs: thin vertical stick from the ground up to a caption
+    if (o.layers.pois) {
+      for (const poi of o.pois) {
+        const ground = poi.ground * ex;
+        // fixed real height: tied to the area size the sticks grew to kilometres on long flights
+        const h = 600 * ex;
+        const top = new THREE.Vector3(poi.x, ground + h, poi.z);
+        const stick = new THREE.Line(
+          new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(poi.x, ground, poi.z), top]),
+          new THREE.LineBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.85 }),
+        );
+        const label = poiSprite(poi.name, poi.ele ?? poi.ground);
+        label.position.copy(top);
+        this.scene.add(stick, label);
+        this.poiObjs.push({ label, stick, top });
+      }
+    }
+
+    // --- air flow streaks in strong thermals and straight climbs
+    if (o.layers.particles) {
+      this.particles = new LiftParticles(m, ex, this.ext);
+      this.scene.add(this.particles.object);
+    }
+
+    // --- firefly: glowing point with a comet tail of the last minutes
+    this.firefly = new THREE.Sprite(
+      new THREE.SpriteMaterial({ map: glowTexture(), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false }),
+    );
+    this.firefly.renderOrder = 6;
+    this.scene.add(this.firefly);
+    this.trailCoreMat = new LineMaterial({ vertexColors: true, linewidth: 3, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+    this.trailHaloMat = new LineMaterial({ vertexColors: true, linewidth: 10, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false });
+    this.trailCore = new Line2(new LineGeometry(), this.trailCoreMat);
+    this.trailHalo = new Line2(new LineGeometry(), this.trailHaloMat);
+    this.trailCore.frustumCulled = false;
+    this.trailHalo.frustumCulled = false;
+    this.scene.add(this.trailHalo, this.trailCore);
+
     // --- pilot marker + drop line
     this.pilot = new THREE.Group();
     const dot = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 16), new THREE.MeshBasicMaterial({ color: '#ff8a3d' }));
@@ -332,6 +439,11 @@ export class FlightScene {
 
     this.windArrow = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(), 1, '#4fc3f7');
     this.windArrow.visible = false;
+    for (const mat of [this.windArrow.line.material, this.windArrow.cone.material] as THREE.Material[]) {
+      mat.transparent = true;
+      mat.opacity = o.windOpacity;
+      mat.depthWrite = false;
+    }
     this.scene.add(this.windArrow);
   }
 
@@ -355,7 +467,7 @@ export class FlightScene {
     };
   }
 
-  update(fr: Frame, width: number, height: number) {
+  update(fr: Frame, width: number, height: number, video?: { frameNo: number; plan: Plan }) {
     const m = this.m;
     const ex = this.o.exaggeration;
     const fi = fr.fi;
@@ -390,15 +502,19 @@ export class FlightScene {
     const flying = !m.isHike[i];
     this.pilot.position.copy(p);
     this.pilot.scale.setScalar(s);
+    const style = this.o.pilotStyle;
     this.pilot.visible = fr.phase !== 'outro' && !flying;
-    this.glider.visible = fr.phase !== 'outro' && flying;
+    this.glider.visible = fr.phase !== 'outro' && flying && style !== 'firefly';
+    this.updateFirefly(fr, p, camDist, flying && style !== 'glider', video?.frameNo ?? 0, width, height);
     if (this.glider.visible) {
       this.glider.position.copy(p);
       this.glider.scale.setScalar(Math.max(1, (camDist * 0.05 * this.o.gliderSize) / GLIDER_SPAN));
       const hx = lerpAt(m.hx, fi);
       const hz = lerpAt(m.hz, fi);
-      // yaw turns +Z (model forward) into the direction of travel, roll banks into the turn
-      this.glider.rotation.set(0, Math.atan2(hx, hz), lerpAt(m.bank, fi));
+      // yaw turns +Z (model forward) into the direction of travel, roll banks into the turn,
+      // a positive x rotation tips the nose down
+      const { roll, pitch } = this.attitude(fi, video);
+      this.glider.rotation.set(-pitch, Math.atan2(hx, hz), roll);
     }
     const g = lerpAt(m.ground, fi) * ex;
     (this.dropLine.geometry as THREE.BufferGeometry).setFromPoints([p, new THREE.Vector3(p.x, g, p.z)]);
@@ -409,6 +525,19 @@ export class FlightScene {
       const d = this.camera.position.distanceTo(th.label.position);
       const h = d * 0.045;
       th.label.scale.set(h * th.label.userData.aspect, h, 1);
+    }
+
+    if (this.particles && video) this.particles.update(video.frameNo, video.plan, fr.phase === 'play');
+
+    for (const poi of this.poiObjs) {
+      const d = this.camera.position.distanceTo(poi.top);
+      const h = d * 0.055;
+      poi.label.scale.set(h * poi.label.userData.aspect, h, 1);
+      // fade out far away so the horizon does not fill with captions
+      const fade = Math.max(0, Math.min(1, (this.ext * 1.1 - d) / (this.ext * 0.4)));
+      (poi.label.material as THREE.SpriteMaterial).opacity = fade;
+      (poi.stick.material as THREE.LineBasicMaterial).opacity = 0.85 * fade;
+      poi.label.visible = poi.stick.visible = fade > 0.02;
     }
 
     for (const gl of this.glideLabels) {
@@ -428,6 +557,85 @@ export class FlightScene {
       this.windArrow.setLength(len, len * 0.35, len * 0.22);
       this.windArrow.visible = true;
     } else this.windArrow.visible = false;
+  }
+
+  /** Glow at the pilot plus a fading trail over the last ~4 % of the flight (at least 2 min) */
+  private updateFirefly(fr: Frame, p: THREE.Vector3, camDist: number, on: boolean, frameNo: number, width: number, height: number) {
+    const show = on && fr.phase === 'play';
+    this.firefly.visible = this.trailCore.visible = this.trailHalo.visible = show;
+    if (!show) return;
+    const m = this.m;
+    const ex = this.o.exaggeration;
+    // gentle flicker like a firefly
+    const flicker = 1 + 0.12 * Math.sin(frameNo * 0.55) + 0.06 * Math.sin(frameNo * 1.7);
+    this.firefly.position.copy(p);
+    this.firefly.scale.setScalar(camDist * 0.045 * flicker);
+    const t = m.res.timeline.t;
+    const fi = fr.fi;
+    const now = lerpAt(t, fi);
+    const span = Math.max(120_000, (t[m.n - 1] - t[0]) * 0.04);
+    const step = Math.max(1, Math.floor(m.n / 6000));
+    const sample: number[] = [];
+    for (let k = Math.floor(fi); k >= 0 && now - t[k] < span; k -= step) sample.push(k);
+    sample.reverse();
+    const warm = new THREE.Color('#fff1c1');
+    const pts: number[] = [];
+    const cols: number[] = [];
+    for (const k of sample) {
+      // additive blending: darker = more transparent, so the tail fades towards the oldest point
+      const a = (1 - (now - t[k]) / span) ** 2;
+      pts.push(m.x[k], m.alt[k] * ex, m.z[k]);
+      cols.push(warm.r * a, warm.g * a, warm.b * a);
+    }
+    pts.push(p.x, p.y, p.z);
+    cols.push(warm.r, warm.g, warm.b);
+    if (pts.length < 6) {
+      this.trailCore.visible = this.trailHalo.visible = false;
+      return;
+    }
+    for (const line of [this.trailCore, this.trailHalo]) {
+      const g = new LineGeometry();
+      g.setPositions(pts);
+      g.setColors(cols);
+      line.geometry.dispose();
+      line.geometry = g;
+    }
+    this.trailCoreMat.resolution.set(width, height);
+    this.trailHaloMat.resolution.set(width, height);
+    this.trailCoreMat.linewidth = Math.max(2, height / 360);
+    this.trailHaloMat.linewidth = Math.max(6, height / 110);
+  }
+
+  /** Bank and pitch from the track, low-passed over video frames, plus a damped shake after each thermal exit */
+  private attitude(fi: number, video?: { frameNo: number; plan: Plan }): { roll: number; pitch: number } {
+    const m = this.m;
+    const roll = lerpAt(m.bank, fi);
+    const pitch = lerpAt(m.pitch, fi);
+    if (!video) return { roll, pitch };
+    const { frameNo, plan } = video;
+    const a = this.att;
+    // sequential frames: follow with inertia; after a jump (scrubbing) start from the target
+    if (Math.abs(frameNo - a.frame) <= 2) {
+      const k = 1 - Math.exp(-Math.abs(frameNo - a.frame) / 4);
+      a.roll += (roll - a.roll) * k;
+      a.pitch += (pitch - a.pitch) * k;
+    } else {
+      a.roll = roll;
+      a.pitch = pitch;
+    }
+    a.frame = frameNo;
+    let dRoll = 0;
+    let dPitch = 0;
+    plan.thermalExit.forEach((ef, j) => {
+      if (ef < 0) return;
+      const d = (frameNo - ef) / plan.fps; // seconds of video since the exit
+      if (d < 0 || d > 3.5) return;
+      const amp = m.thermals[j].exitWobble * Math.exp(-d / 1.1);
+      dRoll += amp * Math.sin(2 * Math.PI * 1.4 * d);
+      // surge: nose dives first, then pitch oscillation
+      dPitch += amp * 0.8 * Math.sin(2 * Math.PI * 1.0 * d + 0.8) - amp * 0.7 * Math.exp(-d / 0.4);
+    });
+    return { roll: a.roll + dRoll, pitch: a.pitch + dPitch };
   }
 
   dispose() {

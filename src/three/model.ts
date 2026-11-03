@@ -18,7 +18,8 @@ export interface Model {
   /** cumulative distance in km */
   dist: Float64Array;
   isHike: Uint8Array;
-  thermals: (Thermal & { idx: number; exitClimb: number })[];
+  /** exitWobble: roll/pitch amplitude (rad) of the shake when leaving the thermal, larger in crosswind */
+  thermals: (Thermal & { idx: number; exitClimb: number; exitWobble: number })[];
   glides: Glide[];
   winds: Wind[];
   launchIdx: number;
@@ -28,6 +29,8 @@ export interface Model {
   hz: Float32Array;
   /** bank angle in radians per point, positive = right turn */
   bank: Float32Array;
+  /** pitch in radians per point, positive = nose up (wing pitches back entering lift, surges leaving it) */
+  pitch: Float32Array;
 }
 
 export function buildModel(res: ActivityResult, terrain: Terrain, precise?: Float32Array): Model {
@@ -66,7 +69,23 @@ export function buildModel(res: ActivityResult, terrain: Terrain, precise?: Floa
 
   const flightSeg = res.segments.find((s) => s.kind === 'flight');
   const { hx, hz, bank } = attitude(tl.t, x, z, tl.speed);
+  const pitch = pitchSeries(tl.t, tl.vario, tl.speed);
+  const winds = res.flight?.winds ?? [];
+  const withWobble = thermals.map((th) => {
+    // crosswind = wind component across the heading when leaving the thermal
+    const w = th.wind ?? th.drift ?? windAtT(winds, tl.t[th.end]);
+    let cross = 0;
+    if (w) {
+      const to = ((w.fromDeg + 180) * Math.PI) / 180;
+      const heading = Math.atan2(hx[th.end], -hz[th.end]);
+      cross = Math.abs(Math.sin(to - heading)) * w.speedKmh;
+    }
+    // base shake from leaving the lift, plus crosswind and the strength of the thermal edge
+    const exitWobble = Math.min(0.35, 0.05 + 0.012 * cross + 0.03 * Math.max(0, th.avgClimb));
+    return { ...th, exitWobble };
+  });
   return {
+    pitch,
     hx,
     hz,
     bank,
@@ -80,9 +99,9 @@ export function buildModel(res: ActivityResult, terrain: Terrain, precise?: Floa
     agl,
     dist,
     isHike,
-    thermals,
+    thermals: withWobble,
     glides: res.segments.flatMap((s) => s.glides ?? []).sort((a, b) => a.start - b.start),
-    winds: res.flight?.winds ?? [],
+    winds,
     launchIdx: flightSeg ? flightSeg.offset : 0,
     landingIdx: flightSeg ? flightSeg.offset + flightSeg.length - 1 : n - 1,
   };
@@ -140,6 +159,43 @@ export function attitude(t: Float64Array, x: Float64Array, z: Float64Array, spee
     bank[i] = sum / (b - a);
   }
   return { hx, hz, bank };
+}
+
+/**
+ * Pitch from the change of climb rate and speed: entering lift the wing pitches back (nose up),
+ * leaving it the wing surges forward; braking/accelerating does the opposite. Smoothed ±3 s, ±20°.
+ */
+export function pitchSeries(t: Float64Array, vario: Float64Array, speedKmh: Float64Array): Float32Array {
+  const n = t.length;
+  const raw = new Float64Array(n);
+  let a = 0, b = 0;
+  for (let i = 0; i < n; i++) {
+    while (t[i] - t[a] > 2000) a++;
+    while (b < n - 1 && t[b + 1] - t[i] <= 2000) b++;
+    const dt = (t[b] - t[a]) / 1000;
+    if (dt <= 0) continue;
+    const dVario = (vario[b] - vario[a]) / dt;
+    const dSpeed = (speedKmh[b] - speedKmh[a]) / 3.6 / dt;
+    raw[i] = 0.45 * dVario - 0.2 * dSpeed;
+  }
+  const out = new Float32Array(n);
+  a = 0; b = 0;
+  let sum = 0;
+  for (let i = 0; i < n; i++) {
+    while (b < n && t[b] - t[i] <= 3000) sum += raw[b++];
+    while (t[i] - t[a] > 3000) sum -= raw[a++];
+    out[i] = Math.max(-0.35, Math.min(0.35, sum / (b - a)));
+  }
+  return out;
+}
+
+function windAtT(winds: Wind[], t: number): Wind | null {
+  let w: Wind | null = null;
+  for (const x of winds) {
+    if (x.t <= t) w = x;
+    else break;
+  }
+  return w ?? winds[0] ?? null;
 }
 
 /** Linear interpolation of a series at a fractional index */
