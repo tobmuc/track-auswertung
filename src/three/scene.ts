@@ -401,10 +401,9 @@ export class FlightScene {
     }
 
     // --- air flow streaks in strong thermals and straight climbs
-    if (o.layers.particles) {
-      this.particles = new LiftParticles(m, ex, this.ext);
-      this.scene.add(this.particles.object);
-    }
+    // zones are also needed without the streaks: the glider rocks when it flies into them
+    this.particles = new LiftParticles(m, ex, this.ext);
+    if (o.layers.particles) this.scene.add(this.particles.object);
 
     // --- firefly: glowing point with a comet tail of the last minutes
     this.firefly = new THREE.Sprite(
@@ -527,7 +526,7 @@ export class FlightScene {
       th.label.scale.set(h * th.label.userData.aspect, h, 1);
     }
 
-    if (this.particles && video) this.particles.update(video.frameNo, video.plan, fr.phase === 'play');
+    if (this.particles && video) this.particles.update(video.frameNo, video.plan, fr.phase === 'play' && this.o.layers.particles);
 
     for (const poi of this.poiObjs) {
       const d = this.camera.position.distanceTo(poi.top);
@@ -626,6 +625,14 @@ export class FlightScene {
     a.frame = frameNo;
     let dRoll = 0;
     let dPitch = 0;
+    // flying into rising air (strong thermal, straight climb): the wing rocks left and right
+    for (const e of this.particles?.entries(plan) ?? []) {
+      const d = (frameNo - e.frame) / plan.fps;
+      if (d < 0 || d > 4) continue;
+      const amp = Math.min(0.35, 0.12 + 0.06 * e.strength) * Math.exp(-d / 1.3);
+      dRoll += amp * Math.sin(2 * Math.PI * 1.1 * d);
+      dPitch += amp * 0.25 * Math.sin(2 * Math.PI * 0.8 * d + 1.2);
+    }
     plan.thermalExit.forEach((ef, j) => {
       if (ef < 0) return;
       const d = (frameNo - ef) / plan.fps; // seconds of video since the exit

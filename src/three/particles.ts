@@ -169,6 +169,12 @@ export class LiftParticles {
     return this.zones.length === 0;
   }
 
+  /** Video frame at which the pilot enters each lift zone, with its strength (m/s) */
+  entries(plan: Plan): { frame: number; strength: number }[] {
+    this.framesFor(plan);
+    return this.zones.map((z) => ({ frame: z.frames![0], strength: z.strength }));
+  }
+
   /** frame range per zone, from the plan (when the pilot enters/leaves) */
   private framesFor(plan: Plan) {
     if (this.planRef === plan) return;

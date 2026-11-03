@@ -67,6 +67,14 @@ const playing = ref(false);
 const exporting = ref(false);
 const fullscreen = ref(false);
 const videoUrl = ref('');
+/** bumped when the POIs arrive, since they change the picture without a setting */
+const poiVersion = ref(0);
+/** everything that changes the exported video; compared with the state of the last export */
+const settingsKey = computed(() =>
+  JSON.stringify([opt, gliderChoice.preset, gliderChoice.designs[gliderChoice.preset], i18n.lang, poiVersion.value, soundFileName.value]),
+);
+const exportedKey = ref('');
+const outdated = computed(() => !!videoUrl.value && exportedKey.value !== settingsKey.value);
 const encodeOk = canEncodeVideo();
 let abort: AbortController | null = null;
 
@@ -126,6 +134,7 @@ async function loadPoisFor() {
     const track: { x: number; z: number }[] = [];
     for (let i = 0; i < m.n; i += Math.max(1, Math.floor(m.n / 400))) track.push({ x: m.x[i], z: m.z[i] });
     pois = selectPois(local, track, Math.max(T.maxX - T.minX, T.maxZ - T.minZ));
+    poiVersion.value++;
     poiStatus.value = `${pois.length} ${t('von')} ${raw.length} ${t('Orten (Wikidata / OpenStreetMap)')}`;
     rebuildScene();
   } catch (e) {
@@ -300,6 +309,7 @@ async function startExport() {
   exporting.value = true;
   if (videoUrl.value) URL.revokeObjectURL(videoUrl.value);
   videoUrl.value = '';
+  const key = settingsKey.value;
   abort = new AbortController();
   // reuse the preview renderer: one WebGL context, textures already uploaded, frames visible while rendering
   const r = preview;
@@ -310,6 +320,7 @@ async function startExport() {
     const audio = await soundtrack();
     const blob = await exportMp4(r, w, h, (done, total) => (progress.value = { label: 'Rendere Video', done, total }), abort.signal, audio);
     videoUrl.value = URL.createObjectURL(blob);
+    exportedKey.value = key;
   } catch (e) {
     if ((e as DOMException).name !== 'AbortError') error.value = e instanceof Error ? e.message : String(e);
   } finally {
@@ -389,9 +400,13 @@ onUnmounted(() => {
           <span class="muted time">{{ timeLabel }}</span>
           <button @click="fullscreen = !fullscreen">{{ fullscreen ? t('Schliessen') : t('Vollbild') }}</button>
         </div>
-        <div v-if="videoUrl && !fullscreen" class="result panel">
+        <div v-if="videoUrl && !fullscreen" class="result panel" :class="{ stale: outdated }">
+          <p v-if="outdated" class="stale-note">
+            {{ t('Einstellungen geändert – dieses Video zeigt noch den alten Stand.') }}
+            <button class="primary" :disabled="exporting || !encodeOk" @click="startExport">{{ t('Video neu erstellen') }}</button>
+          </p>
           <video :src="videoUrl" controls playsinline />
-          <a class="download" :href="videoUrl" :download="fileName"><button class="primary">{{ t('MP4 speichern') }}</button></a>
+          <a class="download" :href="videoUrl" :download="fileName"><button :class="outdated ? '' : 'primary'">{{ t('MP4 speichern') }}{{ outdated ? ` (${t('alter Stand')})` : '' }}</button></a>
         </div>
       </section>
 
@@ -514,7 +529,7 @@ onUnmounted(() => {
           </label>
         </fieldset>
         <button class="primary big" :disabled="!plan || exporting || !encodeOk" @click="startExport">
-          {{ exporting ? t('Video wird erstellt …') : `${t('Video erstellen')} (${exportSize.w}×${exportSize.h})` }}
+          {{ exporting ? t('Video wird erstellt …') : `${t(videoUrl ? 'Video neu erstellen' : 'Video erstellen')} (${exportSize.w}×${exportSize.h})` }}
         </button>
         <p v-if="!encodeOk" class="error">{{ t('Dieser Browser unterstützt kein WebCodecs – bitte Chrome, Edge oder Safari 17+ verwenden.') }}</p>
         <p class="muted small">{{ t('Das Video wird Bild für Bild im Browser gerendert, nichts verlässt deinen Rechner.') }} {{ t('Gelände') }}: Terrain Tiles (AWS)<template v-if="opt.texture !== 'relief'">, {{ t('Karte') }}: {{ MAP_SOURCES[opt.texture].attribution }}</template>.</p>
@@ -541,6 +556,8 @@ onUnmounted(() => {
 .time { font-variant-numeric: tabular-nums; font-size: 13px; }
 .result { padding: 16px; display: flex; flex-direction: column; gap: 12px; align-items: center; }
 .result video { max-height: 60vh; max-width: 100%; border-radius: 8px; }
+.result.stale video { opacity: 0.55; }
+.stale-note { margin: 0; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: center; color: #ffca28; font-size: 14px; text-align: center; }
 .settings { padding: 16px; display: flex; flex-direction: column; gap: 14px; position: sticky; top: 16px; }
 fieldset { border: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
 legend { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); margin-bottom: 6px; }

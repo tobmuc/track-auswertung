@@ -293,4 +293,8 @@ const EN: Record<string, string> = {
   "Luftströmung in starken Thermiken und beim Steigen im Geradeausflug": "Air flow in strong thermals and when climbing in straight flight",
   // UI
   "Startsound beim Abheben": "Launch sound at take-off",
+  // UI
+  "Einstellungen geändert – dieses Video zeigt noch den alten Stand.": "Settings changed – this video still shows the old state.",
+  "Video neu erstellen": "Re-create video",
+  "alter Stand": "old state",
 };
