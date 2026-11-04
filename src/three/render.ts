@@ -16,7 +16,7 @@ export class FrameRenderer {
     this.gl.outputColorSpace = THREE.SRGBColorSpace;
     // only used when the scene asks for sun shadows
     this.gl.shadowMap.enabled = true;
-    this.gl.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.gl.shadowMap.type = THREE.PCFShadowMap;
     this.out = out ?? document.createElement('canvas');
     this.ctx = this.out.getContext('2d')!;
   }

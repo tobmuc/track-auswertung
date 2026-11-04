@@ -14,6 +14,7 @@ import GliderPreview from './GliderPreview.vue';
 import { decodeAudioFile, renderSoundtrack, SoundPlayer, type MusicStyle } from '../three/audio';
 import { GLIDER_PRESETS, gliderChoice, PATTERN_LABEL, resetDesign, type GliderPresetId } from '../three/gliderDesigns';
 import { loadTerrain, loadTexture, MAP_SOURCES, paddedBounds, type MapSourceId, type Terrain, type TerrainTexture } from '../three/terrain';
+import { track as trackEvent } from '../app/analytics';
 import { COMPANION_COLORS, companionOffset, type Companion } from '../three/companions';
 import { baseAt, loadCloudBase, M_PER_K_SPREAD, type CloudBaseSeries } from '../app/weather';
 
@@ -472,6 +473,7 @@ async function startExport() {
     const blob = await exportMp4(r, w, h, (done, total) => (progress.value = { label: 'Rendere Video', done, total }), abort.signal, audio);
     videoUrl.value = URL.createObjectURL(blob);
     exportedKey.value = key;
+    trackEvent('video_export', { format: opt.format, quality: opt.quality, music: opt.music, companions: companionSel.length });
   } catch (e) {
     if ((e as DOMException).name !== 'AbortError') error.value = e instanceof Error ? e.message : String(e);
   } finally {

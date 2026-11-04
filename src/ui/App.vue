@@ -4,6 +4,7 @@ import { onMounted, onUnmounted, ref, shallowRef } from 'vue';
 import { analyzeRecord } from '../app/analysis';
 import { db } from '../app/db';
 import { i18n, t } from '../app/i18n';
+import { analyticsAvailable, consent, resetConsent, setConsent, track } from '../app/analytics';
 import { dateLong, dur, km, SPORT_LABEL } from '../app/format';
 import type { ActivityRecord } from '../app/types';
 import type { Sport } from '../core';
@@ -60,6 +61,7 @@ async function importFiles(list: FileList | File[]) {
       distanceKm: res.hike?.distanceKm,
     };
     const id = await db.activities.add(rec);
+    track('track_import', { sport: res.sport, files: files.length });
     location.hash = `#/a/${id}`;
   } catch (e) {
     error.value = `${t('Import fehlgeschlagen')}: ${e instanceof Error ? e.message : e}`;
@@ -114,7 +116,9 @@ function onPick(e: Event) {
         </a>
         <p v-if="!activities.length" class="muted empty">{{ t('Noch keine Aktivitäten.') }}</p>
       </nav>
-      <p class="muted foot">{{ t('Alle Daten bleiben lokal im Browser (IndexedDB).') }}</p>
+      <p class="muted foot">{{ t('Alle Daten bleiben lokal im Browser (IndexedDB).') }}
+        <template v-if="analyticsAvailable"><br /><button class="link" @click="resetConsent">{{ t('Statistik-Einstellungen') }}</button></template>
+      </p>
     </aside>
 
     <main>
@@ -129,6 +133,13 @@ function onPick(e: Event) {
         </div>
       </section>
     </main>
+    <div v-if="analyticsAvailable && consent.choice === null" class="consent panel" role="dialog" :aria-label="t('Statistik-Einstellungen')">
+      <p>{{ t('Darf diese Seite anonyme Nutzungsstatistiken mit Google Analytics erfassen? Dabei werden Cookies gesetzt und Daten an Google übertragen. Deine Tracks bleiben immer lokal in deinem Browser.') }}</p>
+      <div class="consent-buttons">
+        <button @click="setConsent('denied')">{{ t('Ablehnen') }}</button>
+        <button class="primary" @click="setConsent('granted')">{{ t('Zustimmen') }}</button>
+      </div>
+    </div>
     <div v-if="dragging" class="drag-overlay">{{ t('Dateien loslassen zum Importieren') }}</div>
   </div>
 </template>
@@ -163,6 +174,13 @@ main { min-width: 0; padding: 24px; }
   .sidebar { position: static; height: auto; }
   main { padding: 16px; }
 }
+.consent {
+  position: fixed; left: 16px; right: 16px; bottom: 16px; max-width: 560px; margin: 0 auto; z-index: 100;
+  padding: 16px; display: flex; flex-direction: column; gap: 12px; font-size: 14px; box-shadow: 0 8px 30px rgba(0, 0, 0, .5);
+}
+.consent p { margin: 0; }
+.consent-buttons { display: flex; gap: 8px; justify-content: flex-end; }
+button.link { background: none; border: none; padding: 0; color: var(--muted); text-decoration: underline; cursor: pointer; font-size: 12px; }
 .brand { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .lang { display: flex; gap: 2px; }
 .lang button { padding: 2px 7px; font-size: 11px; }

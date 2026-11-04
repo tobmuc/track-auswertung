@@ -1,12 +1,17 @@
 <script setup lang="ts">
 import * as maplibregl from 'maplibre-gl';
 import type { GeoJSONSource, MapLayerMouseEvent, StyleSpecification } from 'maplibre-gl';
+import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
 import { onMounted, onUnmounted, ref, watch } from 'vue';
 import { colorBucket, type ColorMode } from '../app/colors';
 import type { ActivityResult } from '../app/types';
 import type { XcScore } from '../core';
 import { t } from '../app/i18n';
 import { loadOsmLines, RELIEF_STOPS, type OsmLine } from '../app/relief';
+
+// in the bundled build maplibre would look for its worker next to our own chunk, where it is not;
+// the ?url import makes Vite ship the file and gives us its real address
+maplibregl.setWorkerUrl(workerUrl);
 
 const props = defineProps<{
   result: ActivityResult;
