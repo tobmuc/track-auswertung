@@ -148,14 +148,16 @@ export function makePlan(m: Model, o: DirectorOptions): Plan {
     }
     circ += ((circling ? 1 : 0) - circ) * k;
     const d = baseDist * (1 + 0.25 * circ);
-    const side = 0.3 + 0.1 * circ;
+    // portrait shows only ~29° across: less side offset, or the glider ends up at the edge of the frame
+    const side = (0.3 + 0.1 * circ) * (o.aspect < 1 ? 0.45 : 1);
     const hx = Math.sin(heading), hz = Math.cos(heading);
     const want: [number, number, number] = clearView(clampAbove([
       p[0] - hx * d + -hz * d * side,
       p[1] + d * 0.7,
       p[2] - hz * d + hx * d * side,
     ]), p, d);
-    const look: [number, number, number] = [p[0] + hx * d * 0.1, p[1] - d * 0.32, p[2] + hz * d * 0.1];
+    // look just below the pilot, barely ahead: keeps the glider near the middle of the picture
+    const look: [number, number, number] = [p[0] + hx * d * 0.03, p[1] - d * 0.28, p[2] + hz * d * 0.03];
     if (!cam || !tgt) { cam = want; tgt = look; }
     else {
       // position and look-at catch up faster when they trail far behind (fast pilot in the time lapse)
@@ -165,6 +167,15 @@ export function makePlan(m: Model, o: DirectorOptions): Plan {
       const kTgt = smooth(1.4 / (1 + 3 * tgtGap));
       cam = cam.map((c, j) => c + (want[j] - c) * kCam) as [number, number, number];
       tgt = tgt.map((c, j) => c + (look[j] - c) * kTgt) as [number, number, number];
+      // the smoothed look-at may trail the pilot only a little, else a fast time lapse
+      // pushes the glider to the edge of the frame (portrait shows just ~29° across)
+      const maxLag = d * (o.aspect < 1 ? 0.08 : 0.18);
+      const lx = tgt[0] - look[0], lz = tgt[2] - look[2];
+      const lag = Math.hypot(lx, lz);
+      if (lag > maxLag) {
+        tgt[0] = look[0] + (lx / lag) * maxLag;
+        tgt[2] = look[2] + (lz / lag) * maxLag;
+      }
       clampAbove(cam);
     }
     chase.push({ phase: 'play', fi, cam: [...cam], target: [...tgt], u: f / (playN - 1) });

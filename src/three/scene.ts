@@ -36,7 +36,7 @@ export interface SceneOptions {
   sun: SunSettings;
   /** cloud base m MSL at a main-flight time; null = unknown */
   cloudBase: ((t: number) => number) | null;
-  /** Glider size on screen (1 = span ≈ 5 % of the camera distance; never below real size) */
+  /** Glider size on screen (1 = span = GLIDER_SCREEN × camera distance; never below real size) */
   gliderSize: number;
   glider: GliderDesign;
   /** how the pilot is shown in flight */
@@ -46,6 +46,8 @@ export interface SceneOptions {
 }
 
 const LOW_AGL = 150;
+/** glider span as a share of the camera distance at size 1 (≈ 8 % of the picture width in portrait) */
+const GLIDER_SCREEN = 0.065;
 
 function varioColor(v: number): THREE.Color {
   const s = VARIO_STOPS;
@@ -810,7 +812,7 @@ export class FlightScene {
     this.updateFirefly(fr, p, camDist, flying && style !== 'glider', video?.frameNo ?? 0, width, height);
     if (this.glider.visible) {
       this.glider.position.copy(p);
-      this.glider.scale.setScalar(Math.max(1, (camDist * 0.05 * this.o.gliderSize) / GLIDER_SPAN));
+      this.glider.scale.setScalar(Math.max(1, (camDist * GLIDER_SCREEN * this.o.gliderSize) / GLIDER_SPAN));
       const hx = lerpAt(m.hx, fi);
       const hz = lerpAt(m.hz, fi);
       // yaw turns +Z (model forward) into the direction of travel, roll banks into the turn,
@@ -961,7 +963,7 @@ export class FlightScene {
         continue;
       }
       k.glider.position.copy(p);
-      k.glider.scale.setScalar(Math.max(1, (d * 0.05 * this.o.gliderSize) / GLIDER_SPAN));
+      k.glider.scale.setScalar(Math.max(1, (d * GLIDER_SCREEN * this.o.gliderSize) / GLIDER_SPAN));
       k.glider.rotation.set(-lerpAt(cm.pitch, cfi), Math.atan2(lerpAt(cm.hx, cfi), lerpAt(cm.hz, cfi)), lerpAt(cm.bank, cfi));
       const h = d * 0.03;
       k.tag.position.set(p.x, p.y + d * 0.035, p.z);
@@ -980,7 +982,8 @@ export class FlightScene {
     // gentle flicker like a firefly
     const flicker = 1 + 0.12 * Math.sin(frameNo * 0.55) + 0.06 * Math.sin(frameNo * 1.7);
     this.firefly.position.copy(p);
-    this.firefly.scale.setScalar(camDist * 0.045 * flicker);
+    // together with the glider the glow stays small, a big one would outshine the wing
+    this.firefly.scale.setScalar(camDist * (this.o.pilotStyle === 'both' ? 0.018 : 0.045) * flicker);
     const t = m.res.timeline.t;
     const fi = fr.fi;
     const now = lerpAt(t, fi);

@@ -333,6 +333,7 @@ const EN: Record<string, string> = {
   'Abstand zur Basis': 'To cloud base',
   'Relief (Höhenfarben + OSM)': 'Relief (elevation colours + OSM)',
   Relief: 'Relief',
+  Glühwürmchen: 'Firefly',
   'Statistik-Einstellungen': 'Analytics settings',
   'Darf diese Seite anonyme Nutzungsstatistiken mit Google Analytics erfassen? Dabei werden Cookies gesetzt und Daten an Google übertragen. Deine Tracks bleiben immer lokal in deinem Browser.': 'May this site collect anonymous usage statistics with Google Analytics? This sets cookies and sends data to Google. Your tracks always stay local in your browser.',
   Ablehnen: 'Decline',

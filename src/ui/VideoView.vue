@@ -556,6 +556,11 @@ onUnmounted(() => {
           <span class="muted time">{{ timeLabel }}</span>
           <button @click="fullscreen = !fullscreen">{{ fullscreen ? t('Schliessen') : t('Vollbild') }}</button>
         </div>
+        <div v-if="plan" class="style-switch seg" role="group" :aria-label="t('Darstellung im Flug')">
+          <button :class="{ active: opt.pilotStyle === 'glider' }" :disabled="exporting" @click="opt.pilotStyle = 'glider'">🪂 {{ t('Schirm') }}</button>
+          <button :class="{ active: opt.pilotStyle === 'firefly' }" :disabled="exporting" @click="opt.pilotStyle = 'firefly'">✨ {{ t('Glühwürmchen') }}</button>
+          <button :class="{ active: opt.pilotStyle === 'both' }" :disabled="exporting" @click="opt.pilotStyle = 'both'">🪂✨ {{ t('Beides') }}</button>
+        </div>
         <div v-if="videoUrl && !fullscreen" class="result panel" :class="{ stale: outdated }">
           <p v-if="outdated" class="stale-note">
             {{ t('Einstellungen geändert – dieses Video zeigt noch den alten Stand.') }}
@@ -779,6 +784,7 @@ label.check { flex-direction: row; align-items: flex-start; gap: 8px; }
 label input[type=range] { accent-color: var(--accent); }
 .seg { display: flex; gap: 6px; }
 .seg button { flex: 1; font-size: 13px; }
+.style-switch { width: 100%; max-width: 900px; }
 .big { padding: 12px; font-size: 15px; }
 .pair { display: flex; gap: 8px; }
 .pair input { flex: 1; min-width: 0; }
