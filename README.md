@@ -11,6 +11,11 @@ Für Gleitschirm, Hike & Fly, Hängegleiter und Wandern.
 Deine Tracks bleiben auf deinem Gerät: Sie werden im Browser gespeichert und nirgendwohin hochgeladen.
 
 <p align="center">
+  <img src="docs/images/demo-flug.gif" width="100%" alt="Animiertes Demo: 81-km-XC-Flug als 3D-Video mit Thermiken, Wolken, Sonnen-Panel und Datenleiste">
+</p>
+<p align="center"><em>Demo: ein 81-km-Streckenflug (4 h 17 min) als 30-Sekunden-Video, hier im Zeitraffer</em></p>
+
+<p align="center">
   <img src="docs/images/portrait-thermik.webp" width="32%" alt="3D-Video im Hochformat: Thermikschlauch mit Auslöser am Boden, Wolke und Sonnenstand">
   &nbsp;
   <img src="docs/images/portrait-schatten.webp" width="32%" alt="3D-Video im Hochformat: Gleitschirm mit Schatten am Hang, Gipfelbeschriftung und Einstrahlung">

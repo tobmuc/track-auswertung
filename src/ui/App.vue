@@ -18,6 +18,8 @@ const dragging = ref(false);
 const importing = ref(false);
 const error = ref('');
 const fileInput = ref<HTMLInputElement>();
+const demoVideo = `${import.meta.env.BASE_URL}demo/demo-flug.mp4`;
+const demoPoster = `${import.meta.env.BASE_URL}demo/demo-flug.jpg`;
 
 const sub = liveQuery(() => db.activities.orderBy('date').reverse().toArray()).subscribe((list) => (activities.value = list));
 onUnmounted(() => sub.unsubscribe());
@@ -126,8 +128,28 @@ function onPick(e: Event) {
       <VideoView v-if="currentId && view === '3d'" :id="currentId" :key="`3d-${currentId}`" />
       <ActivityView v-else-if="currentId" :id="currentId" :key="currentId" />
       <section v-else class="welcome">
+        <div class="hero">
+          <div class="hero-text">
+            <p class="kicker">{{ t('Gleitschirm · Hike & Fly · Drachen') }}</p>
+            <h1>{{ t('Dein Flug in 3D.') }} <span>{{ t('In einer Minute.') }}</span></h1>
+            <p>{{ t('Track hineinziehen: Thermiken, XC-Wertung und Gleitzahlen auf einen Blick, dazu ein 3D-Flugvideo mit Musik für Instagram und YouTube.') }}</p>
+            <ul class="chips">
+              <li>🏆 {{ t('XC-Wertung') }}</li>
+              <li>🌀 {{ t('Thermik-Analyse') }}</li>
+              <li>🎬 {{ t('3D-Video als MP4') }}</li>
+              <li>🪂 {{ t('Mehrere Piloten') }}</li>
+              <li>☀️ {{ t('Sonne & Wolken') }}</li>
+              <li>🔒 {{ t('Bleibt auf deinem Gerät') }}</li>
+            </ul>
+          </div>
+          <figure class="demo">
+            <video :src="demoVideo" :poster="demoPoster" autoplay muted loop playsinline preload="auto" />
+            <figcaption><span class="live" /> {{ t('Beispiel: 81 km XC-Flug, 4 h 17 min im 30-Sekunden-Video') }}</figcaption>
+          </figure>
+        </div>
         <div class="drop panel" :class="{ over: dragging }" @click="fileInput?.click()">
-          <h1>{{ t('Track laden') }}</h1>
+          <div class="drop-icon">⬆</div>
+          <h2>{{ t('Track laden') }}</h2>
           <p>{{ t('IGC aus dem Vario oder GPX von Uhr/Handy hierher ziehen oder klicken.') }}</p>
           <p class="muted">{{ t('Hike & Fly: Aufstieg (GPX) und Flug (IGC) zusammen auswählen, oder eine Datei mit beidem.') }}</p>
         </div>
@@ -160,10 +182,32 @@ function onPick(e: Event) {
 .list a.current { background: var(--panel-2); box-shadow: inset 3px 0 var(--accent); }
 .empty, .foot { font-size: 12px; }
 main { min-width: 0; padding: 24px; }
-.welcome { display: grid; place-items: center; min-height: 70vh; }
-.drop { padding: 64px; text-align: center; cursor: pointer; border-style: dashed; max-width: 560px; }
-.drop.over { border-color: var(--accent); }
-.drop h1 { margin-bottom: 12px; }
+.welcome { display: flex; flex-direction: column; gap: 24px; max-width: 1180px; margin: 0 auto; }
+.hero { display: grid; grid-template-columns: minmax(260px, 5fr) 7fr; gap: 32px; align-items: center; }
+.kicker { color: var(--accent); font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; margin: 0 0 8px; }
+.hero h1 { font-size: clamp(28px, 3.6vw, 44px); line-height: 1.1; margin: 0 0 14px; }
+.hero h1 span { color: var(--accent); }
+.hero-text > p { color: var(--muted); font-size: 16px; line-height: 1.5; margin: 0 0 18px; }
+.chips { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.chips li { background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; font-size: 13px; }
+.demo { margin: 0; position: relative; border-radius: 14px; overflow: hidden; border: 1px solid var(--line); background: #000; box-shadow: 0 20px 60px rgba(0, 0, 0, .45); }
+.demo video { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+.demo figcaption {
+  position: absolute; left: 12px; bottom: 12px; display: flex; align-items: center; gap: 8px; font-size: 12px;
+  background: rgba(10, 14, 19, .72); padding: 5px 10px; border-radius: 999px; backdrop-filter: blur(4px);
+}
+.live { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: pulse 1.6s infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+.drop { padding: 36px; text-align: center; cursor: pointer; border-style: dashed; transition: border-color .15s, background .15s; }
+.drop:hover, .drop.over { border-color: var(--accent); background: var(--panel-2); }
+.drop h2 { margin: 4px 0 8px; }
+.drop p { margin: 4px 0; }
+.drop-icon { font-size: 28px; color: var(--accent); }
+@media (max-width: 1000px) {
+  .hero { grid-template-columns: 1fr; gap: 18px; }
+  .demo { order: -1; }
+}
+@media (prefers-reduced-motion: reduce) { .live { animation: none; } }
 .error { color: #ff6b6b; }
 .drag-overlay {
   position: fixed; inset: 0; display: grid; place-items: center; font-size: 24px; font-weight: 700;
