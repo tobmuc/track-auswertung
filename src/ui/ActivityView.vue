@@ -13,6 +13,8 @@ import { compass } from '../core/geo';
 import GroundPanel from './GroundPanel.vue';
 import ProfileChart from './ProfileChart.vue';
 import TrackMap from './TrackMap.vue';
+import ThermalCircles from './ThermalCircles.vue';
+import { centring, type Centring } from '../core';
 
 const props = defineProps<{ id: number }>();
 
@@ -206,6 +208,24 @@ const thermals = computed(() =>
   [...(res.value?.segments.flatMap((s) => s.thermals) ?? [])].sort((a, b) => b.gain - a.gain).slice(0, 12),
 );
 
+/** centring and circle size per thermal, keyed by the thermal object of the flight segment */
+const thermalCircles = computed(() => {
+  const r = res.value;
+  const seg = r?.segments.find((s) => s.kind === 'flight');
+  const map = new Map<object, Centring>();
+  if (!r?.flight?.circles || !seg) return map;
+  for (const c of centring(r.flight.circles)) if (seg.thermals[c.thermal]) map.set(seg.thermals[c.thermal], c);
+  return map;
+});
+function circleCell(th: object) {
+  const c = thermalCircles.value.get(th);
+  return c ? `${F.num(2 * c.meanRadiusM)} m · ${F.num(c.meanBankDeg)}°` : '–';
+}
+function centredCell(th: object) {
+  const c = thermalCircles.value.get(th);
+  return c?.centredAfterS != null ? `${F.num(c.centredAfterS)} s` : '–';
+}
+
 const glides = computed(() => res.value?.segments.flatMap((s) => s.glides).filter((g) => g.distanceKm >= 1) ?? []);
 const glideSort = ref<'time' | 'dist' | 'ratio'>('time');
 const glidesSorted = computed(() => {
@@ -386,7 +406,7 @@ watch(() => props.id, load);
     <section v-if="thermals.length" class="panel block">
       <h2>{{ t('Stärkste Thermiken') }}</h2>
       <table>
-        <thead><tr><th>{{ t('Zeit') }}</th><th>{{ t('Basis → Top') }}</th><th>{{ t('Gewinn') }}</th><th>{{ t('Ø Steigen') }}</th><th>{{ t('Dauer') }}</th><th>{{ t('Wind (Kreise)') }}</th><th :title="t('Wind aus dem Versatz der Kreismittelpunkte')">{{ t('Wind (Drift)') }}</th><th :title="t('Versatz des Thermikkerns vom untersten zum obersten Kreis')">{{ t('Versatz') }}</th></tr></thead>
+        <thead><tr><th>{{ t('Zeit') }}</th><th>{{ t('Basis → Top') }}</th><th>{{ t('Gewinn') }}</th><th>{{ t('Ø Steigen') }}</th><th>{{ t('Dauer') }}</th><th>{{ t('Wind (Kreise)') }}</th><th :title="t('Wind aus dem Versatz der Kreismittelpunkte')">{{ t('Wind (Drift)') }}</th><th :title="t('Versatz des Thermikkerns vom untersten zum obersten Kreis')">{{ t('Versatz') }}</th><th :title="t('Ø Kreisdurchmesser relativ zur Luft und Querlage')">{{ t('Ø Kreis') }}</th><th :title="t('Zeit vom Einflug bis zum ersten Kreis mit 80 % des besten Steigens')">{{ t('Zentriert') }}</th></tr></thead>
         <tbody>
           <tr v-for="th in thermals" :key="th.start" @mouseenter="hoverIdx = th.start" @mouseleave="hoverIdx = null">
             <td>{{ F.clock(res.timeline.t[th.start], tz) }}</td>
@@ -397,10 +417,14 @@ watch(() => props.id, load);
             <td>{{ th.wind ? `${compass(th.wind.fromDeg)} ${F.num(th.wind.speedKmh)} km/h` : '–' }}</td>
             <td>{{ th.drift ? `${compass(th.drift.fromDeg)} ${F.num(th.drift.speedKmh)} km/h` : '–' }}</td>
             <td>{{ coreOffset(th) ?? '–' }}</td>
+            <td>{{ circleCell(th) }}</td>
+            <td>{{ centredCell(th) }}</td>
           </tr>
         </tbody>
       </table>
     </section>
+
+    <ThermalCircles v-if="res.flight" :result="res" :title="rec?.title ?? ''" />
   </article>
 </template>
 

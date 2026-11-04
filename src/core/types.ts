@@ -40,6 +40,27 @@ export interface Circling extends Range {
   durationS: number;
 }
 
+/** One full 360° turn */
+export interface CircleStat {
+  /** mid time, ms */
+  t: number;
+  /** mean altitude over the turn, m */
+  alt: number;
+  durationS: number;
+  /** +1 right, -1 left */
+  dir: 1 | -1;
+  /** height gained over the turn / duration, m/s */
+  climb: number;
+  /** radius relative to the air (wind removed), m */
+  radiusM: number;
+  /** bank angle from radius and turn time, degrees */
+  bankDeg: number;
+  /** airspeed from the wind fit, km/h; null when the circle was too irregular */
+  airspeedKmh: number | null;
+  /** index into FlightStats.thermals, -1 when the circling gained too little */
+  thermal: number;
+}
+
 export interface Thermal extends Range {
   gain: number;
   avgClimb: number;
@@ -140,6 +161,8 @@ export interface FlightStats {
   circlingRightS: number;
   avgTimePerCircleS: number | null;
   circlings: Circling[];
+  /** every full turn, in time order */
+  circles: CircleStat[];
   thermals: Thermal[];
   glides: Glide[];
   winds: Wind[];

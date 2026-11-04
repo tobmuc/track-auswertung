@@ -1,6 +1,6 @@
 import { angleDiff, bearingDeg, distM, localXY } from './geo';
 import { gainLoss, windowRate } from './series';
-import type { Circling, CorePoint, FlightMode, FlightStats, Glide, Range, Series, Thermal, TrackPoint, Wind } from './types';
+import type { CircleStat, Circling, CorePoint, FlightMode, FlightStats, Glide, Range, Series, Thermal, TrackPoint, Wind } from './types';
 
 const AIRBORNE_KMH = 12;
 const AIRBORNE_VARIO = 1.5;
@@ -168,6 +168,7 @@ export function analyzeFlight(pts: TrackPoint[], r: Range, s: Series): FlightSta
   const winds: Wind[] = [];
   const circleWinds: { i: number; vx: number; vy: number }[] = [];
   const centres: (CorePoint & { i: number })[] = [];
+  const circles: (CircleStat & { i: number })[] = [];
   for (const c of circlings) {
     let i0 = c.start;
     for (let i = c.start + 1; i <= c.end; i++) {
@@ -180,6 +181,8 @@ export function analyzeFlight(pts: TrackPoint[], r: Range, s: Series): FlightSta
         }
         const ce = circleCentre(pts, r.start, s, i0, i);
         if (ce) centres.push({ ...ce, i: mid });
+        const cs = circleStat(pts, r.start, s, i0, i, c.dir, w?.airspeed ?? null);
+        if (cs) circles.push({ ...cs, thermal: -1, i: mid });
         i0 = i;
       }
     }
@@ -208,6 +211,7 @@ export function analyzeFlight(pts: TrackPoint[], r: Range, s: Series): FlightSta
     const gain = s.alt[hi] - s.alt[lo];
     const dur = s.s[hi] - s.s[lo];
     if (gain >= 30 && dur > 0) {
+      for (const ci of circles) if (ci.i >= start && ci.i <= end) ci.thermal = thermals.length;
       const ws = circleWinds.filter((w) => w.i >= start && w.i <= end);
       const core = centres.filter((c) => c.i >= start && c.i <= end).map(({ i: _, ...c }) => c);
       const mid = pts[r.start + ((lo + hi) >> 1)];
@@ -345,11 +349,49 @@ export function analyzeFlight(pts: TrackPoint[], r: Range, s: Series): FlightSta
     circlingRightS: right.reduce((a, c) => a + c.durationS, 0),
     avgTimePerCircleS: nCircles ? circlingS / nCircles : null,
     circlings,
+    circles: circles.map(({ i: _, ...c }) => c),
     thermals,
     glides,
     winds,
     wind,
     modeShare: modeTime,
+  };
+}
+
+const G = 9.81;
+
+/**
+ * Size and steepness of one full turn. The radius is taken relative to the air: with the airspeed
+ * from the wind fit r = v·T / 2π; without it, from the path flown relative to the ground (slightly
+ * off in wind, but the wind adds as much on one side as it takes on the other).
+ * Bank from a coordinated turn: tan φ = v² / (g·r) = 4π²·r / (g·T²).
+ */
+function circleStat(
+  pts: TrackPoint[], off: number, s: Series, from: number, to: number, dir: 1 | -1, airspeed: number | null,
+): Omit<CircleStat, 'thermal'> | null {
+  const T = s.s[to] - s.s[from];
+  if (T < 8 || T > 120) return null;
+  let path = 0;
+  let sa = 0;
+  for (let i = from; i < to; i++) {
+    const p = pts[off + i];
+    const q = pts[off + i + 1];
+    path += distM(p.lat, p.lon, q.lat, q.lon);
+    sa += ((s.alt[i] + s.alt[i + 1]) / 2) * (s.s[i + 1] - s.s[i]);
+  }
+  const v = airspeed ?? path / T;
+  const radiusM = (v * T) / (2 * Math.PI);
+  if (radiusM < 5 || radiusM > 400) return null;
+  const mid = pts[off + ((from + to) >> 1)];
+  return {
+    t: mid.t,
+    alt: sa / T,
+    durationS: T,
+    dir,
+    climb: (s.alt[to] - s.alt[from]) / T,
+    radiusM,
+    bankDeg: (Math.atan((4 * Math.PI ** 2 * radiusM) / (G * T * T)) * 180) / Math.PI,
+    airspeedKmh: airspeed != null ? airspeed * 3.6 : null,
   };
 }
 

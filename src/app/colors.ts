@@ -65,3 +65,6 @@ export function colorBucket(mode: ColorMode, m: number, vario: number, speed: nu
   }
   return scale(SPEED_STOPS, Math.round(speed / 2.5) * 2.5);
 }
+
+/** Colour for a climb rate (m/s) on the vario scale */
+export const varioColor = (v: number) => scale(VARIO_STOPS, v);

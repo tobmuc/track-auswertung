@@ -56,6 +56,15 @@ Am besten in Chrome oder Edge (für den Video-Export, Safari ab Version 17 geht 
 - Gleitstrecken mit Gleitzahl über Grund und in der Luft (ohne Windeinfluss)
 - Zeit in der Luft nach Phasen: Kreisen, Steigen, Gleiten, starkes Sinken
 
+**Thermik & Kreisformen**
+- Jeder Vollkreis einzeln vermessen: Durchmesser relativ zur Luft (Wind herausgerechnet), Kreiszeit,
+  berechnete Querlage und Steigen
+- Verteilung der Steigwerte, Kreisdurchmesser gegen Steigen (mit dem Durchmesser, der am besten stieg),
+  Steigen nach Höhenband und nach Tageszeit
+- **Zentrieren:** Steigen Kreis für Kreis ab dem Einflug und die Zeit, bis 80 % des besten Steigens erreicht sind –
+  pro Thermik und im Schnitt
+- Jedes Diagramm als PNG speichern, zum Teilen oder für die Trainerbesprechung
+
 **Karte**
 - Satellit, Sentinel-2, Topo, Strasse und **Relief** (Höhenfarben mit Schummerung, Seen, Flüsse,
   Strassen und Grenzen – ähnlich der XContest-Reliefkarte, aber aus offenen Daten)
