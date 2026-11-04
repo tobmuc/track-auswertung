@@ -18,7 +18,10 @@ const dragging = ref(false);
 const importing = ref(false);
 const error = ref('');
 const fileInput = ref<HTMLInputElement>();
-const demoVideo = `${import.meta.env.BASE_URL}demo/demo-flug.mp4`;
+const BUILD = __BUILD__;
+const buildDate = new Intl.DateTimeFormat('de-CH', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(BUILD.date));
+const buildTitle = `Version ${BUILD.version}, Build ${BUILD.build}, Commit ${BUILD.commit}, ${new Date(BUILD.date).toLocaleString()}`;
+const demoVideo =`${import.meta.env.BASE_URL}demo/demo-flug.mp4`;
 const demoPoster = `${import.meta.env.BASE_URL}demo/demo-flug.jpg`;
 
 const sub = liveQuery(() => db.activities.orderBy('date').reverse().toArray()).subscribe((list) => (activities.value = list));
@@ -120,6 +123,7 @@ function onPick(e: Event) {
       </nav>
       <p class="muted foot">{{ t('Alle Daten bleiben lokal im Browser (IndexedDB).') }}
         <template v-if="analyticsAvailable"><br /><button class="link" @click="resetConsent">{{ t('Statistik-Einstellungen') }}</button></template>
+        <br /><a class="version" :title="buildTitle" :href="`https://github.com/tobmuc/track-auswertung/commit/${BUILD.commit.replace('+', '')}`" target="_blank" rel="noopener">v{{ BUILD.version }} · Build {{ BUILD.build }} · {{ BUILD.commit }} · {{ buildDate }}</a>
       </p>
     </aside>
 
@@ -224,7 +228,9 @@ main { min-width: 0; padding: 24px; }
 }
 .consent p { margin: 0; }
 .consent-buttons { display: flex; gap: 8px; justify-content: flex-end; }
-button.link { background: none; border: none; padding: 0; color: var(--muted); text-decoration: underline; cursor: pointer; font-size: 12px; }
+.version { display: inline-block; margin-top: 6px; color: var(--muted); font-size: 11px; text-decoration: none; font-variant-numeric: tabular-nums; opacity: .8; }
+.version:hover { text-decoration: underline; opacity: 1; }
+button.link {background: none; border: none; padding: 0; color: var(--muted); text-decoration: underline; cursor: pointer; font-size: 12px; }
 .brand { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .lang { display: flex; gap: 2px; }
 .lang button { padding: 2px 7px; font-size: 11px; }
