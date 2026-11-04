@@ -149,9 +149,14 @@ haben getrennte Speicher.
 
 ### Online-Version (GitHub Pages)
 
-Bei jedem Push auf `main` baut `.github/workflows/pages.yml` die App (mit Tests) und veröffentlicht sie unter
-https://tobmuc.github.io/track-auswertung/. Im Repo ist unter *Settings → Pages* als Quelle „GitHub Actions“
-eingestellt.
+Die App liegt unter https://tobmuc.github.io/track-auswertung/. Derzeit wird sie aus dem Branch `gh-pages`
+ausgeliefert, der den Inhalt von `dist/` enthält: neu bauen und den Inhalt von `dist/` (plus eine leere
+`.nojekyll`) als neuen Commit auf `gh-pages` pushen.
+
+Automatisch bei jedem Push geht es mit dem Workflow `.github/workflows/pages.yml` (baut, testet, veröffentlicht).
+Er ist vorbereitet, aber noch nicht im Repo: Workflow-Dateien lassen sich nur mit der GitHub-Berechtigung
+`workflow` hochladen (`gh auth refresh -h github.com -s workflow`). Danach die Datei committen und unter
+*Settings → Pages* die Quelle auf „GitHub Actions“ stellen.
 
 Lokal testen wie auf Pages: `npm run build`, dann `npx vite preview --base /track-auswertung/`.
 
