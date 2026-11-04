@@ -77,7 +77,7 @@ async function fromWikidata(b: PoiBounds, lang: Lang): Promise<Poi[]> {
   return [...byItem.values()];
 }
 
-const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
+export const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
 
 async function fromOsm(b: PoiBounds, lang: Lang): Promise<Poi[]> {
   const bb = `${b.south},${b.west},${b.north},${b.east}`;

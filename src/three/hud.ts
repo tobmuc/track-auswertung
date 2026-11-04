@@ -4,6 +4,8 @@ import { locale, t as tr } from '../app/i18n';
 import { bestGlide, maxWind, thermalGain } from '../app/summary';
 import type { Frame, Plan } from './director';
 import { lerpAt, windAt, type Model } from './model';
+import { companionFi, type Companion } from './companions';
+import { irradiance, sunPosition, sunTime, sunVector, type SunSettings } from './sun';
 
 export interface HudOptions {
   title: string;
@@ -12,6 +14,12 @@ export interface HudOptions {
   profile: boolean;
   /** opacity of the dark panels behind the overlays, 0..1 */
   panelOpacity: number;
+  /** sun panel (position, irradiance on the slope below) when sun.info is set */
+  sun?: SunSettings;
+  /** cloud base m MSL at a main-flight time */
+  cloudBase?: ((t: number) => number) | null;
+  /** further pilots, listed with colour and altitude */
+  companions?: Companion[];
 }
 
 const ACCENT = '#ff8a3d';
@@ -167,6 +175,34 @@ export function drawHud(g: CanvasRenderingContext2D, W: number, H: number, m: Mo
       g.textAlign = 'left';
     }
 
+    // --- sun and cloud base (bottom right, just above the data bar: at the top it covered the glider)
+    if (!hike && (o.sun?.info || o.cloudBase)) sunPanel(g, W, barY - 16 * S, pad, S, m, fi, t, o);
+
+    // --- further pilots (left, below the decision panel)
+    if (o.companions?.length) {
+      const rows = [{ name: tr('Ich'), color: ACCENT, alt: alt as number | null }];
+      for (const c of o.companions) {
+        const cfi = companionFi(c, t);
+        rows.push({ name: c.name, color: c.color, alt: cfi == null ? null : lerpAt(c.model.alt, cfi) });
+      }
+      const lh = 40 * S;
+      const bw = 360 * S;
+      const by = (W > H ? pad : pad + 150 * S) + (o.decisions ? 124 * S : 0);
+      panel(g, pad, by, bw, rows.length * lh + 20 * S, 16 * S);
+      rows.forEach((r, k) => {
+        const y = by + 10 * S + k * lh + lh * 0.7;
+        g.fillStyle = r.color;
+        g.beginPath(); g.arc(pad + 26 * S, y - 9 * S, 9 * S, 0, Math.PI * 2); g.fill();
+        g.fillStyle = '#fff';
+        g.font = `600 ${24 * S}px system-ui, sans-serif`;
+        g.fillText(r.name, pad + 46 * S, y, bw * 0.55);
+        g.textAlign = 'right';
+        g.fillStyle = r.alt == null ? '#8b98a8' : '#fff';
+        g.fillText(r.alt == null ? '–' : `${num(r.alt)} m`, pad + bw - 18 * S, y);
+        g.textAlign = 'left';
+      });
+    }
+
     // --- decisions: current thermal, exit, glide search
     if (o.decisions) {
       let msg: { head: string; body: string; color: string } | null = null;
@@ -250,6 +286,75 @@ export function drawHud(g: CanvasRenderingContext2D, W: number, H: number, m: Mo
     g.globalAlpha = 1;
   }
   g.restore();
+}
+
+/**
+ * Sun position as a small sky plot (zenith in the centre, horizon on the ring, north up),
+ * time of day, elevation, clear-sky irradiance on flat ground and on the slope below the pilot,
+ * and the cloud base with the pilot's distance to it.
+ */
+function sunPanel(g: CanvasRenderingContext2D, W: number, bottom: number, pad: number, S: number, m: Model, fi: number, t: number, o: HudOptions) {
+  const lines: [string, string?][] = [];
+  const bw = 300 * S;
+  const x = W - pad - bw;
+  let plotH = 0;
+  let sun: { azimuth: number; elevation: number } | null = null;
+  if (o.sun?.info) {
+    const ts = sunTime(t, o.sun);
+    const T = m.terrain;
+    sun = sunPosition(ts, T.frame.lat0, T.frame.lon0);
+    const v = sunVector(sun.azimuth, sun.elevation);
+    // slope below the pilot from the terrain gradient
+    const px = lerpAt(m.x, fi), pz = lerpAt(m.z, fi), d = 60;
+    const gx = (T.heightAt(px + d, pz) - T.heightAt(px - d, pz)) / (2 * d);
+    const gz = (T.heightAt(px, pz + d) - T.heightAt(px, pz - d)) / (2 * d);
+    const nl = Math.hypot(gx, 1, gz);
+    const cosInc = (-gx * v[0] + v[1] - gz * v[2]) / nl;
+    const slope = (Math.atan(Math.hypot(gx, gz)) * 180) / Math.PI;
+    const facing = ((Math.atan2(-gx, gz) * 180) / Math.PI + 360) % 360;
+    const shifted = o.sun.hourOffset !== 0 || !!o.sun.date;
+    lines.push([`${tr('Sonne')} ${clock(ts, m.res.timeZone)}${shifted ? ' *' : ''}`, '#ffd54f']);
+    lines.push([`${num(Math.max(0, sun.elevation))}° · ${compass(sun.azimuth)} ${num(sun.azimuth)}°`]);
+    lines.push([`${tr('Flach')} ${num(irradiance(sun.elevation, Math.sin((sun.elevation * Math.PI) / 180)))} W/m²`]);
+    if (slope >= 5) lines.push([`${tr('Hang')} ${num(slope)}° ${compass(facing)}: ${num(irradiance(sun.elevation, cosInc))} W/m²`, cosInc > Math.sin((sun.elevation * Math.PI) / 180) ? '#ffca28' : '#90a4ae']);
+    plotH = 120 * S;
+  }
+  if (o.cloudBase) {
+    const base = o.cloudBase(t);
+    const gap = base - lerpAt(m.alt, fi);
+    lines.push([`${tr('Basis')} ${num(base)} m`, '#e3f2fd']);
+    // the pilot climbs towards the base: show the distance still to go (never negative)
+    lines.push([`${tr('Abstand zur Basis')} ${num(Math.max(0, gap))} m`, '#8b98a8']);
+  }
+  const lh = 32 * S;
+  const bh = plotH + lines.length * lh + 22 * S;
+  const y = bottom - bh;
+  panel(g, x, y, bw, bh, 18 * S);
+  if (sun) {
+    const r = 50 * S;
+    const cx = x + bw / 2, cy = y + 14 * S + r;
+    g.strokeStyle = 'rgba(255,255,255,.35)';
+    g.lineWidth = 2 * S;
+    g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.stroke();
+    g.beginPath(); g.arc(cx, cy, r * (2 / 3), 0, Math.PI * 2); g.stroke();
+    g.fillStyle = '#8b98a8';
+    g.font = `700 ${16 * S}px system-ui, sans-serif`;
+    g.textAlign = 'center';
+    g.fillText('N', cx, cy - r - 2 * S);
+    const rr = r * Math.min(1.08, (90 - sun.elevation) / 90);
+    const a = (sun.azimuth * Math.PI) / 180;
+    g.fillStyle = sun.elevation > 0 ? '#ffd54f' : '#607d8b';
+    g.shadowColor = '#ffb300';
+    g.shadowBlur = sun.elevation > 0 ? 14 * S : 0;
+    g.beginPath(); g.arc(cx + Math.sin(a) * rr, cy - Math.cos(a) * rr, 10 * S, 0, Math.PI * 2); g.fill();
+    g.shadowBlur = 0;
+    g.textAlign = 'left';
+  }
+  lines.forEach(([text, color], k) => {
+    g.fillStyle = color ?? '#fff';
+    g.font = `${k === 0 ? 700 : 600} ${22 * S}px system-ui, sans-serif`;
+    g.fillText(text, x + 18 * S, y + plotH + 12 * S + (k + 1) * lh - 8 * S, bw - 36 * S);
+  });
 }
 
 /** Final statistics shown at the end of the video */

@@ -5,13 +5,15 @@ import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { VARIO_STOPS } from '../app/colors';
 import type { Frame, Plan } from './director';
 import { lerpAt, windAt, type Model } from './model';
-import { sunPosition } from './sun';
-import type { TerrainTexture } from './terrain';
+import { sunPosition, sunTime, sunVector, type SunSettings } from './sun';
+import type { Terrain, TerrainTexture } from './terrain';
 import { buildGlider, GLIDER_SPAN } from './glider';
 import type { GliderDesign } from './gliderDesigns';
 import type { Poi } from '../app/pois';
 import { LiftParticles } from './particles';
+import { companionFi, type Companion } from './companions';
 import { compass } from '../core/geo';
+import type { Thermal } from '../core';
 import { t } from '../app/i18n';
 
 export interface SceneOptions {
@@ -20,7 +22,20 @@ export interface SceneOptions {
   exaggeration: number;
   /** opacity of the 3D wind arrow, 0..1 */
   windOpacity: number;
-  layers: { thermals: boolean; drift: boolean; glides: boolean; curtain: boolean; wind: boolean; contours: boolean; pois: boolean; particles: boolean };
+  layers: {
+    thermals: boolean; drift: boolean; glides: boolean; curtain: boolean; wind: boolean; contours: boolean; pois: boolean; particles: boolean;
+    /** thermal trigger: axis extended down to the ground */
+    triggers: boolean;
+    /** cumulus at cloud base over the thermals */
+    clouds: boolean;
+  };
+  /** further flights in the same area, each with its own colour and glider */
+  companions: Companion[];
+  /** minutes after which the track fades out (thermal circles stay); 0 = never */
+  fadeMin: number;
+  sun: SunSettings;
+  /** cloud base m MSL at a main-flight time; null = unknown */
+  cloudBase: ((t: number) => number) | null;
   /** Glider size on screen (1 = span ≈ 5 % of the camera distance; never below real size) */
   gliderSize: number;
   glider: GliderDesign;
@@ -101,6 +116,185 @@ function thermalAxis(core: { x: number; z: number; alt: number }[], x0: number, 
     const l = pts[pts.length - 1];
     return [l.x, l.z];
   };
+}
+
+/**
+ * Horizontal drift of the thermal per metre of height (x, z): least squares through the circle
+ * centres, else wind speed / climb rate downwind, else vertical. Limited to 2.5 m per metre.
+ */
+function driftPerMetre(th: Thermal, core: { x: number; z: number; alt: number }[]): [number, number] {
+  let sx = 0, sz = 0;
+  if (core.length >= 3) {
+    const n = core.length;
+    const ma = core.reduce((s, c) => s + c.alt, 0) / n;
+    const mx = core.reduce((s, c) => s + c.x, 0) / n;
+    const mz = core.reduce((s, c) => s + c.z, 0) / n;
+    let saa = 0, sax = 0, saz = 0;
+    for (const c of core) {
+      saa += (c.alt - ma) ** 2;
+      sax += (c.alt - ma) * (c.x - mx);
+      saz += (c.alt - ma) * (c.z - mz);
+    }
+    if (saa > 100) { sx = sax / saa; sz = saz / saa; }
+  } else {
+    const w = th.drift ?? th.wind;
+    if (w && th.avgClimb > 0.3) {
+      const to = ((w.fromDeg + 180) * Math.PI) / 180;
+      const k = w.speedKmh / 3.6 / th.avgClimb;
+      sx = Math.sin(to) * k;
+      sz = -Math.cos(to) * k;
+    }
+  }
+  const len = Math.hypot(sx, sz);
+  return len > 2.5 ? [(sx / len) * 2.5, (sz / len) * 2.5] : [sx, sz];
+}
+
+/** Follows the thermal axis down from its lowest point until it meets the terrain */
+function findTrigger(T: Terrain, x: number, z: number, alt: number, slope: [number, number]) {
+  for (let d = 0; d <= 4000; d += 10) {
+    const px = x - slope[0] * d;
+    const pz = z - slope[1] * d;
+    const h = T.heightAt(px, pz);
+    if (alt - d <= h) return { x: px, z: pz, h };
+  }
+  return { x: x - slope[0] * 4000, z: z - slope[1] * 4000, h: T.heightAt(x - slope[0] * 4000, z - slope[1] * 4000) };
+}
+
+/** Slope angle (deg) and the compass direction it faces at a point */
+function slopeAt(T: Terrain, x: number, z: number): { angle: number; facing: number } {
+  const d = 60;
+  const gx = (T.heightAt(x + d, z) - T.heightAt(x - d, z)) / (2 * d);
+  const gz = (T.heightAt(x, z + d) - T.heightAt(x, z - d)) / (2 * d);
+  // downhill direction (-gx, -gz); z points south, so north = -z
+  return { angle: (Math.atan(Math.hypot(gx, gz)) * 180) / Math.PI, facing: ((Math.atan2(-gx, gz) * 180) / Math.PI + 360) % 360 };
+}
+
+/** Disc lying on the terrain (heights sampled per vertex), slightly lifted to avoid z-fighting */
+function drapedDisc(T: Terrain, cx: number, cz: number, r: number, ex: number, seg = 32, rings = 4): THREE.BufferGeometry {
+  // the terrain mesh is coarser than the disc: lift with the size so ridges between vertices do not cut into it
+  const lift = Math.max(6, r * 0.25) * ex;
+  const pos: number[] = [cx, T.heightAt(cx, cz) * ex + lift, cz];
+  const index: number[] = [];
+  for (let j = 1; j <= rings; j++) {
+    for (let k = 0; k < seg; k++) {
+      const a = (k / seg) * Math.PI * 2;
+      const x = cx + Math.cos(a) * (r * j) / rings;
+      const z = cz + Math.sin(a) * (r * j) / rings;
+      pos.push(x, T.heightAt(x, z) * ex + lift, z);
+    }
+  }
+  for (let k = 0; k < seg; k++) index.push(0, 1 + ((k + 1) % seg), 1 + k);
+  for (let j = 1; j < rings; j++) {
+    const a0 = 1 + (j - 1) * seg, b0 = 1 + j * seg;
+    for (let k = 0; k < seg; k++) {
+      const k1 = (k + 1) % seg;
+      index.push(a0 + k, a0 + k1, b0 + k, a0 + k1, b0 + k1, b0 + k);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(index);
+  return g;
+}
+
+/** Shared uniforms of all fading tracks: current time and fade duration in seconds since the main launch */
+interface FadeUniforms { uNow: { value: number }; uFade: { value: number } }
+const FADE_DECL = 'uniform float uNow;\nuniform float uFade;\nvarying float vTime;\n';
+// vTime < 0 marks thermal circles, which never fade
+const FADE_ALPHA = 'float fadeA = vTime < 0.0 ? 1.0 : 1.0 - smoothstep( uFade * 0.6, uFade, uNow - vTime );\nif ( fadeA < 0.004 ) discard;';
+
+/** Makes a track line fade with age; `times` per point (s), -1 = keep */
+function fadeLine(mat: LineMaterial, geo: LineGeometry, times: number[], u: FadeUniforms) {
+  const seg = new Float32Array((times.length - 1) * 2);
+  for (let k = 0; k < times.length - 1; k++) {
+    // a segment touching a thermal keeps both ends, otherwise the varying blends -1 into the age
+    const keep = times[k] < 0 || times[k + 1] < 0;
+    seg[2 * k] = keep ? -1 : times[k];
+    seg[2 * k + 1] = keep ? -1 : times[k + 1];
+  }
+  const buf = new THREE.InstancedInterleavedBuffer(seg, 2, 1);
+  geo.setAttribute('instanceTimeStart', new THREE.InterleavedBufferAttribute(buf, 1, 0));
+  geo.setAttribute('instanceTimeEnd', new THREE.InterleavedBufferAttribute(buf, 1, 1));
+  mat.transparent = true;
+  mat.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, u);
+    sh.vertexShader = 'attribute float instanceTimeStart;\nattribute float instanceTimeEnd;\nvarying float vTime;\n' +
+      sh.vertexShader.replace('void main() {', 'void main() {\n\tvTime = ( position.y < 0.5 ) ? instanceTimeStart : instanceTimeEnd;');
+    sh.fragmentShader = FADE_DECL + sh.fragmentShader.replace(
+      'gl_FragColor = vec4( diffuseColor.rgb, alpha );',
+      `${FADE_ALPHA}\n\tgl_FragColor = vec4( diffuseColor.rgb, alpha * fadeA );`,
+    );
+  };
+}
+
+/** Same fade for a mesh with a per-vertex `aTime` attribute (the curtain) */
+function fadeMesh(mat: THREE.Material, u: FadeUniforms) {
+  mat.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, u);
+    sh.vertexShader = 'attribute float aTime;\nvarying float vTime;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvTime = aTime;');
+    sh.fragmentShader = FADE_DECL + sh.fragmentShader.replace('#include <dithering_fragment>', `#include <dithering_fragment>\n${FADE_ALPHA}\ngl_FragColor.a *= fadeA;`);
+  };
+}
+
+/** Small deterministic random generator, so a cloud looks the same in every frame and export */
+function rng(seed: number) {
+  let s = seed >>> 0;
+  return () => {
+    s = (s + 0x6d2b79f5) >>> 0;
+    let r = Math.imul(s ^ (s >>> 15), 1 | s);
+    r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) ^ r;
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+let puffTex: THREE.CanvasTexture | null = null;
+/** Soft cauliflower puff: a few overlapping round blobs */
+function cloudPuffTexture(): THREE.CanvasTexture {
+  if (puffTex) return puffTex;
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d')!;
+  const r = rng(7);
+  for (let k = 0; k < 7; k++) {
+    const x = 64 + (r() - 0.5) * 40, y = 64 + (r() - 0.5) * 30, rad = 26 + r() * 22;
+    const grd = g.createRadialGradient(x, y, 0, x, y, rad);
+    grd.addColorStop(0, 'rgba(255,255,255,.9)');
+    grd.addColorStop(0.6, 'rgba(255,255,255,.55)');
+    grd.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grd;
+    g.fillRect(0, 0, 128, 128);
+  }
+  puffTex = new THREE.CanvasTexture(c);
+  puffTex.colorSpace = THREE.SRGBColorSpace;
+  return puffTex;
+}
+
+/** Cumulus as a cluster of puffs: dome on top, grey flat-ish base at y = 0 of the group */
+function buildCloud(R: number, seed: number): { group: THREE.Group; mats: THREE.SpriteMaterial[] } {
+  const group = new THREE.Group();
+  const tex = cloudPuffTexture();
+  const top = new THREE.SpriteMaterial({ map: tex, color: '#ffffff', transparent: true, depthWrite: false });
+  const mid = new THREE.SpriteMaterial({ map: tex, color: '#e3e7ee', transparent: true, depthWrite: false });
+  const base = new THREE.SpriteMaterial({ map: tex, color: '#a9b2bf', transparent: true, depthWrite: false });
+  const r = rng(seed);
+  const add = (mat: THREE.SpriteMaterial, x: number, y: number, z: number, s: number) => {
+    const sp = new THREE.Sprite(mat);
+    sp.position.set(x, y, z);
+    sp.scale.setScalar(s);
+    sp.renderOrder = 3;
+    group.add(sp);
+  };
+  for (let k = 0; k < 7; k++) {
+    const a = r() * Math.PI * 2, d = R * (0.2 + 0.6 * r());
+    add(base, Math.cos(a) * d, R * 0.18, Math.sin(a) * d, R * (0.7 + 0.3 * r()));
+  }
+  for (let k = 0; k < 12; k++) {
+    const a = r() * Math.PI * 2, d = R * 0.75 * Math.sqrt(r());
+    const h = R * (0.4 + 0.7 * r() * (1 - d / R));
+    add(h > R * 0.7 ? top : mid, Math.cos(a) * d, h, Math.sin(a) * d, R * (0.6 + 0.4 * r()));
+  }
+  add(top, 0, R * 1.05, 0, R * 0.85);
+  return { group, mats: [top, mid, base] };
 }
 
 type Ctx2D = CanvasRenderingContext2D & { letterSpacing: string };
@@ -191,6 +385,8 @@ export class FlightScene {
   private glider: THREE.Group;
   private dropLine: THREE.Line;
   private thermalObjs: { group: THREE.Group; label: THREE.Sprite; start: number; top: number }[] = [];
+  /** shared material of the thermal rims, width set per frame from the output height */
+  private rimMat = new LineMaterial({ vertexColors: true, linewidth: 2, worldUnits: false });
   private glideLabels: { label: THREE.Sprite; end: number }[] = [];
   private poiObjs: { label: THREE.Sprite; stick: THREE.Line; top: THREE.Vector3 }[] = [];
   private firefly: THREE.Sprite;
@@ -200,6 +396,14 @@ export class FlightScene {
   private trailCoreMat: LineMaterial;
   private trailHaloMat: LineMaterial;
   private windArrow: THREE.ArrowHelper;
+  private ghost: Line2;
+  private fade: FadeUniforms = { uNow: { value: 0 }, uFade: { value: 1e9 } };
+  private sunLight: THREE.DirectionalLight;
+  private hemi: THREE.HemisphereLight;
+  private sky = { day: new THREE.Color('#b4cfe8'), dusk: new THREE.Color('#e9c6a5'), night: new THREE.Color('#1d2635') };
+  private clouds: { group: THREE.Group; mats: THREE.SpriteMaterial[]; R: number; start: number; end: number; center: THREE.Vector3 }[] = [];
+  private comps: { c: Companion; idx: number[]; line: Line2; mat: LineMaterial; glider: THREE.Group; tag: THREE.Sprite; drop: THREE.Line }[] = [];
+  private triggerLabels: THREE.Sprite[] = [];
   /** attitude smoothed over video frames (the time lapse would otherwise make it jump) */
   private att = { frame: -10, roll: 0, pitch: 0 };
   private ext: number;
@@ -213,13 +417,13 @@ export class FlightScene {
     // haze in sky colour hides the terrain edges in wide shots
     this.scene.background = new THREE.Color('#b4cfe8');
     this.scene.fog = new THREE.Fog('#b4cfe8', this.ext * 0.45, this.ext * 1.25);
-    const mid = m.res.timeline.t[Math.floor(m.n / 2)];
-    const sun = sunPosition(mid, T.frame.lat0, T.frame.lon0);
-    const el = Math.max(12, sun.elevation) * (Math.PI / 180);
-    const az = sun.azimuth * (Math.PI / 180);
-    const light = new THREE.DirectionalLight('#fff6e8', 2.4);
-    light.position.set(Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el)).multiplyScalar(100000);
-    this.scene.add(light, new THREE.HemisphereLight('#dbe9ff', '#5a5040', 0.9));
+    // the light follows the sun over the flight (see updateSun); shadows only on request
+    this.sunLight = new THREE.DirectionalLight('#fff6e8', 2.4);
+    this.sunLight.castShadow = o.sun.shadows;
+    this.sunLight.shadow.mapSize.set(4096, 4096);
+    this.sunLight.shadow.bias = -0.0004;
+    this.hemi = new THREE.HemisphereLight('#dbe9ff', '#5a5040', 0.9);
+    this.scene.add(this.sunLight, this.sunLight.target, this.hemi);
 
     // --- terrain mesh
     const geo = new THREE.BufferGeometry();
@@ -254,7 +458,17 @@ export class FlightScene {
       mat = new THREE.MeshStandardMaterial({ color: '#f1ede4', roughness: 0.95, metalness: 0 });
     }
     if (o.layers.contours) this.addContours(mat, o.texture ? 200 : 100, ex);
-    this.scene.add(new THREE.Mesh(geo, mat));
+    const ground = new THREE.Mesh(geo, mat);
+    ground.receiveShadow = ground.castShadow = o.sun.shadows;
+    this.scene.add(ground);
+
+    // fade times per point: seconds since the main flight's first fix, -1 inside thermals (they stay)
+    const t0 = m.res.timeline.t[0];
+    const timesFor = (mm: Model, idx: number[], offsetMs: number) => {
+      const keep = new Uint8Array(mm.n);
+      for (const th of mm.thermals) keep.fill(1, th.start, th.end + 1);
+      return idx.map((i) => (keep[i] ? -1 : (mm.res.timeline.t[i] - offsetMs - t0) / 1000));
+    };
 
     // --- track (vario coloured), revealed progressively via instanceCount
     this.idx = decimate(m);
@@ -272,17 +486,21 @@ export class FlightScene {
     this.trackMat = new LineMaterial({ vertexColors: true, linewidth: 4, worldUnits: false });
     this.track = new Line2(lg, this.trackMat);
     this.track.computeLineDistances();
+    const times = timesFor(m, this.idx, 0);
+    if (o.fadeMin > 0) fadeLine(this.trackMat, lg, times, this.fade);
     this.scene.add(this.track);
-    // faint full route for orientation
+    // faint full route for orientation (hidden while the track fades, it would undo the effect)
     const ghostGeo = new LineGeometry();
     ghostGeo.setPositions(positions);
     this.ghostMat = new LineMaterial({ color: 0xffffff, linewidth: 2, transparent: true, opacity: 0.35, depthWrite: false });
-    this.scene.add(new Line2(ghostGeo, this.ghostMat));
+    this.ghost = new Line2(ghostGeo, this.ghostMat);
+    this.scene.add(this.ghost);
 
     // --- curtain from track down to the ground (height above ground; red below 150 m)
     {
       const cp: number[] = [];
       const cc: number[] = [];
+      const ct: number[] = [];
       const white = new THREE.Color('#ffffff');
       const red = new THREE.Color('#ff3b30');
       for (let k = 0; k < this.idx.length - 1; k++) {
@@ -293,14 +511,17 @@ export class FlightScene {
         const low = m.agl[a] < LOW_AGL && !m.isHike[a];
         const col = m.isHike[a] ? new THREE.Color('#8bc34a') : low ? red : white;
         for (let v = 0; v < 6; v++) cc.push(col.r, col.g, col.b);
+        const keep = times[k] < 0 || times[k + 1] < 0;
+        const ta = keep ? -1 : times[k], tb = keep ? -1 : times[k + 1];
+        ct.push(ta, ta, tb, tb, ta, tb);
       }
       const cg = new THREE.BufferGeometry();
       cg.setAttribute('position', new THREE.Float32BufferAttribute(cp, 3));
       cg.setAttribute('color', new THREE.Float32BufferAttribute(cc, 3));
-      this.curtain = new THREE.Mesh(
-        cg,
-        new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false }),
-      );
+      cg.setAttribute('aTime', new THREE.Float32BufferAttribute(ct, 1));
+      const cm = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.1, side: THREE.DoubleSide, depthWrite: false });
+      if (o.fadeMin > 0) fadeMesh(cm, this.fade);
+      this.curtain = new THREE.Mesh(cg, cm);
       this.curtain.visible = o.layers.curtain;
       this.scene.add(this.curtain);
     }
@@ -322,7 +543,8 @@ export class FlightScene {
         const rings = Array.from({ length: N + 1 }, (_, k) => {
           const alt = th.baseAlt + ((th.topAlt - th.baseAlt) * k) / N;
           const [ax, az] = axis(alt);
-          return { x: ax, y: alt * ex, z: az, r: r * (0.55 + 0.5 * (k / N)) };
+          // half the original width: hugs the circles more closely
+          return { x: ax, y: alt * ex, z: az, r: r * 0.5 * (0.55 + 0.5 * (k / N)) };
         });
         const funnel = new THREE.Mesh(
           funnelGeometry(rings),
@@ -330,10 +552,18 @@ export class FlightScene {
         );
         g.add(funnel);
         const top = rings[N];
-        const ring = new THREE.Mesh(new THREE.TorusGeometry(top.r, r * 0.06, 6, 32), new THREE.MeshBasicMaterial({ color }));
-        ring.rotation.x = Math.PI / 2;
-        ring.position.set(top.x, top.y, top.z);
-        g.add(ring);
+        // thin rim with a fixed width on screen (a torus got fat when the camera came close)
+        const rim: number[] = [];
+        const rimCol: number[] = [];
+        for (let k = 0; k <= 48; k++) {
+          const a = (k / 48) * Math.PI * 2;
+          rim.push(top.x + Math.cos(a) * top.r, top.y, top.z + Math.sin(a) * top.r);
+          rimCol.push(color.r, color.g, color.b);
+        }
+        const rimGeo = new LineGeometry();
+        rimGeo.setPositions(rim);
+        rimGeo.setColors(rimCol);
+        g.add(new Line2(rimGeo, this.rimMat));
         const lines = [`+${th.avgClimb.toFixed(1)} m/s`, `+${Math.round(th.gain)} m`];
         if (core.length >= 2) {
           // vertical reference from the base: makes the drift of the core visible
@@ -343,19 +573,65 @@ export class FlightScene {
             new THREE.LineDashedMaterial({ color: '#ffffff', transparent: true, opacity: 0.55, dashSize: r * 0.6, gapSize: r * 0.4 }),
           );
           ref.computeLineDistances();
-          // circle centres as small dots along the core
-          const dotGeo = new THREE.SphereGeometry(r * 0.12, 8, 6);
-          const dotMat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.8 });
-          for (const c of core) {
-            const d = new THREE.Mesh(dotGeo, dotMat);
-            d.position.set(c.x, c.alt * ex, c.z);
-            g.add(d);
-          }
+          // circle centres as small dots along the core, fixed size on screen
+          const dots = new THREE.Points(
+            new THREE.BufferGeometry().setFromPoints(core.map((c) => new THREE.Vector3(c.x, c.alt * ex, c.z))),
+            new THREE.PointsMaterial({ color: '#ffffff', size: 5, sizeAttenuation: false, transparent: true, opacity: 0.85, depthWrite: false }),
+          );
+          g.add(dots);
           g.add(ref);
           const dx = top.x - base.x;
           const dz = top.z - base.z;
           const off = Math.hypot(dx, dz);
           if (off >= 30) lines.push(`${t('Versatz')} ${Math.round(off)} m ${compass(((Math.atan2(dx, -dz) * 180) / Math.PI + 360) % 360)}`);
+        }
+        const slope = driftPerMetre(th, core);
+        if (o.layers.triggers) {
+          // trigger: the axis continued below the lowest circle until it meets the ground
+          const base = rings[0];
+          const trg = findTrigger(T, base.x, base.z, th.baseAlt, slope);
+          const tr = Math.max(40, this.ext * 0.0015);
+          const disc = new THREE.Mesh(
+            drapedDisc(T, trg.x, trg.z, tr, ex),
+            new THREE.MeshBasicMaterial({ color: '#ffb74d', transparent: true, opacity: 0.45, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }),
+          );
+          const spot = new THREE.Mesh(
+            drapedDisc(T, trg.x, trg.z, tr * 0.3, ex, 16, 1),
+            new THREE.MeshBasicMaterial({ color: '#ff6d00', transparent: true, opacity: 0.9, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3 }),
+          );
+          disc.renderOrder = spot.renderOrder = 2;
+          const axisLine = new THREE.Line(
+            new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(trg.x, trg.h * ex, trg.z), new THREE.Vector3(base.x, base.y, base.z)]),
+            new THREE.LineDashedMaterial({ color: '#ffb74d', transparent: true, opacity: 0.85, dashSize: r * 0.5, gapSize: r * 0.35 }),
+          );
+          axisLine.computeLineDistances();
+          g.add(disc, spot, axisLine);
+          if (labelled.has(th.idx)) {
+            const sl = slopeAt(T, trg.x, trg.z);
+            const tl = labelSprite([`${t('Auslöser')} ${Math.round(trg.h)} m`, sl.angle >= 5 ? `${t('Hang')} ${Math.round(sl.angle)}° ${compass(sl.facing)}` : t('flach')], '#ffb74d');
+            tl.position.set(trg.x, trg.h * ex + r * 1.6, trg.z);
+            g.add(tl);
+            this.triggerLabels.push(tl);
+          }
+        }
+        if (o.layers.clouds && o.cloudBase) {
+          // cumulus where the axis, continued upwards with the same drift, reaches the cloud base
+          const cb = Math.max(o.cloudBase(m.res.timeline.t[th.end]), th.topAlt + 50);
+          const up = cb - th.topAlt;
+          const cx = top.x + slope[0] * up, cz = top.z + slope[1] * up;
+          const R = Math.min(900, Math.max(250, 220 + 140 * th.avgClimb + 0.12 * th.gain));
+          const cl = buildCloud(R, th.idx + 1);
+          cl.group.position.set(cx, cb * ex, cz);
+          cl.group.visible = false;
+          this.scene.add(cl.group);
+          const link = new THREE.Line(
+            new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(top.x, top.y, top.z), new THREE.Vector3(cx, cb * ex, cz)]),
+            new THREE.LineDashedMaterial({ color: '#ffffff', transparent: true, opacity: 0.35, dashSize: r * 0.25, gapSize: r * 0.5 }),
+          );
+          link.computeLineDistances();
+          g.add(link);
+          lines.push(`${t('Basis')} ${Math.round(cb)} m`);
+          this.clouds.push({ ...cl, R, start: th.start, end: th.end, center: new THREE.Vector3(cx, cb * ex + R * 0.6, cz) });
         }
         const label = labelSprite(lines, `#${color.getHexString()}`);
         label.position.set(top.x, top.y + r * 2.2, top.z);
@@ -429,7 +705,32 @@ export class FlightScene {
     // in flight the dot is replaced by a paraglider that follows heading and bank
     this.glider = buildGlider(o.glider);
     this.glider.rotation.order = 'YXZ';
+    this.glider.traverse((c) => (c.castShadow = o.sun.shadows));
     this.scene.add(this.glider);
+
+    // --- further pilots: own colour for track and name tag, own glider
+    for (const c of o.companions) {
+      const cm = c.model;
+      const idx = decimate(cm);
+      const pts: number[] = [];
+      for (const i of idx) pts.push(cm.x[i], cm.alt[i] * ex + (cm.isHike[i] ? 3 : 0), cm.z[i]);
+      const geo = new LineGeometry();
+      geo.setPositions(pts);
+      const mat = new LineMaterial({ color: new THREE.Color(c.color).getHex(), linewidth: 3, worldUnits: false });
+      if (o.fadeMin > 0) fadeLine(mat, geo, timesFor(cm, idx, c.offsetMs), this.fade);
+      const line = new Line2(geo, mat);
+      const glider = buildGlider(c.design);
+      glider.rotation.order = 'YXZ';
+      glider.traverse((x) => (x.castShadow = o.sun.shadows));
+      const tag = labelSprite([c.name], c.color);
+      tag.center.set(0.5, 0);
+      const drop = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
+        new THREE.LineBasicMaterial({ color: c.color, transparent: true, opacity: 0.5 }),
+      );
+      this.scene.add(line, glider, tag, drop);
+      this.comps.push({ c, idx, line, mat, glider, tag, drop });
+    }
     this.dropLine = new THREE.Line(
       new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
       new THREE.LineBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.7 }),
@@ -478,6 +779,8 @@ export class FlightScene {
     this.trackMat.linewidth = Math.max(2.5, height / 300);
     this.ghostMat.resolution.set(width, height);
     this.ghostMat.linewidth = Math.max(1.5, height / 600);
+    this.rimMat.resolution.set(width, height);
+    this.rimMat.linewidth = Math.max(1.5, height / 540);
 
     // reveal track/curtain up to the current point
     const all = fr.phase === 'outro';
@@ -519,6 +822,31 @@ export class FlightScene {
     (this.dropLine.geometry as THREE.BufferGeometry).setFromPoints([p, new THREE.Vector3(p.x, g, p.z)]);
     this.dropLine.visible = this.glider.visible;
 
+    const tNow = lerpAt(m.res.timeline.t, fi);
+    // fading track: the whole route comes back for the closing overview
+    this.fade.uNow.value = (tNow - m.res.timeline.t[0]) / 1000;
+    this.fade.uFade.value = this.o.fadeMin > 0 && !all ? this.o.fadeMin * 60 : 1e9;
+    this.ghost.visible = !(this.o.fadeMin > 0 && fr.phase === 'play');
+    this.updateSun(fr, tNow, p, g, camDist);
+    this.updateCompanions(fr, tNow, width, height, camDist);
+
+    for (const cl of this.clouds) {
+      cl.group.visible = all || fi >= cl.start;
+      if (!cl.group.visible) continue;
+      // the cloud builds up while the pilot climbs in the thermal
+      const grow = all ? 1 : Math.min(1, Math.max(0, (fi - cl.start) / Math.max(1, cl.end - cl.start)));
+      cl.group.scale.setScalar(0.35 + 0.65 * grow);
+      // fade out when the camera comes close, so it never flies blind through a cloud
+      const d = this.camera.position.distanceTo(cl.center);
+      const a = Math.min(1, Math.max(0, (d - cl.R * 1.2) / (cl.R * 2)));
+      for (const mat of cl.mats) mat.opacity = 0.92 * a;
+      cl.group.visible = a > 0.01;
+    }
+    for (const tl of this.triggerLabels) {
+      const h = this.camera.position.distanceTo(tl.getWorldPosition(new THREE.Vector3())) * 0.035;
+      tl.scale.set(h * tl.userData.aspect, h, 1);
+    }
+
     for (const th of this.thermalObjs) {
       th.group.visible = all || fi >= th.start;
       const d = this.camera.position.distanceTo(th.label.position);
@@ -556,6 +884,90 @@ export class FlightScene {
       this.windArrow.setLength(len, len * 0.35, len * 0.22);
       this.windArrow.visible = true;
     } else this.windArrow.visible = false;
+  }
+
+  /**
+   * Light from the sun position at the current flight time (or the what-if time): direction,
+   * strength and colour, sky tint, and a shadow frustum that covers the glider and its shadow on the ground.
+   */
+  private updateSun(fr: Frame, tNow: number, p: THREE.Vector3, groundY: number, camDist: number) {
+    const T = this.m.terrain;
+    const sun = sunPosition(sunTime(tNow, this.o.sun), T.frame.lat0, T.frame.lon0);
+    const el = sun.elevation;
+    // light never from below the horizon; a low sun gives long shadows, but not endless ones
+    const v = new THREE.Vector3(...sunVector(sun.azimuth, Math.max(4, el)));
+    const day = Math.min(1, Math.max(0, (el + 2) / 14));
+    const warm = Math.min(1, Math.max(0, 1 - (el - 2) / 18));
+    this.sunLight.intensity = 0.25 + 2.3 * day;
+    this.sunLight.color.set('#fff6e8').lerp(new THREE.Color('#ffb070'), warm * day);
+    this.hemi.intensity = 0.35 + 0.6 * day;
+    const sky = this.sky.night.clone().lerp(this.sky.dusk, Math.min(1, day * 1.6)).lerp(this.sky.day, 1 - warm);
+    (this.scene.background as THREE.Color).copy(sky);
+    this.scene.fog!.color.copy(sky);
+
+    let center: THREE.Vector3;
+    let half: number;
+    if (fr.phase === 'play') {
+      // ground point of the glider's shadow: from the glider along the sun ray down to its ground height
+      const s = p.clone().addScaledVector(v, -(p.y - groundY) / v.y);
+      center = p.clone().add(s).multiplyScalar(0.5);
+      half = Math.max(camDist * 1.8, p.distanceTo(s) / 2 + camDist * 0.6);
+    } else {
+      center = new THREE.Vector3(...fr.target);
+      half = this.ext * 0.4;
+    }
+    const D = 40000 + half * 2;
+    this.sunLight.target.position.copy(center);
+    this.sunLight.position.copy(center).addScaledVector(v, D);
+    if (this.sunLight.castShadow) {
+      const cam = this.sunLight.shadow.camera;
+      cam.left = cam.bottom = -half;
+      cam.right = cam.top = half;
+      cam.near = D * 0.3;
+      cam.far = D * 1.8;
+      cam.updateProjectionMatrix();
+      this.sunLight.shadow.normalBias = (2 * half) / 4096 * 1.5;
+    }
+  }
+
+  /** Tracks and gliders of the further pilots at the main flight's current time */
+  private updateCompanions(fr: Frame, tNow: number, width: number, height: number, camDist: number) {
+    const ex = this.o.exaggeration;
+    for (const k of this.comps) {
+      const cm = k.c.model;
+      k.mat.resolution.set(width, height);
+      k.mat.linewidth = Math.max(2, height / 360);
+      const cfi = fr.phase === 'intro' ? null : companionFi(k.c, tNow);
+      let shown = 0;
+      if (fr.phase === 'outro' || (cfi == null && fr.phase === 'play' && tNow + k.c.offsetMs > cm.res.timeline.t[cm.n - 1])) shown = k.idx.length - 1;
+      else if (cfi != null) {
+        let lo = 0, hi = k.idx.length - 1;
+        while (lo < hi) {
+          const mid = (lo + hi + 1) >> 1;
+          if (k.idx[mid] <= cfi) lo = mid;
+          else hi = mid - 1;
+        }
+        shown = lo;
+      }
+      (k.line.geometry as LineGeometry).instanceCount = shown;
+      const flying = cfi != null && fr.phase === 'play' && !cm.isHike[Math.round(cfi)];
+      k.glider.visible = k.tag.visible = k.drop.visible = flying;
+      if (!flying) continue;
+      const p = new THREE.Vector3(lerpAt(cm.x, cfi), lerpAt(cm.alt, cfi) * ex, lerpAt(cm.z, cfi));
+      const d = this.camera.position.distanceTo(p);
+      // a pilot right next to the chase camera would cover the whole picture
+      if (d < camDist * 0.35) {
+        k.glider.visible = k.tag.visible = false;
+        continue;
+      }
+      k.glider.position.copy(p);
+      k.glider.scale.setScalar(Math.max(1, (d * 0.05 * this.o.gliderSize) / GLIDER_SPAN));
+      k.glider.rotation.set(-lerpAt(cm.pitch, cfi), Math.atan2(lerpAt(cm.hx, cfi), lerpAt(cm.hz, cfi)), lerpAt(cm.bank, cfi));
+      const h = d * 0.03;
+      k.tag.position.set(p.x, p.y + d * 0.035, p.z);
+      k.tag.scale.set(h * k.tag.userData.aspect, h, 1);
+      (k.drop.geometry as THREE.BufferGeometry).setFromPoints([p, new THREE.Vector3(p.x, lerpAt(cm.ground, cfi) * ex, p.z)]);
+    }
   }
 
   /** Glow at the pilot plus a fading trail over the last ~4 % of the flight (at least 2 min) */

@@ -14,6 +14,8 @@ import GliderPreview from './GliderPreview.vue';
 import { decodeAudioFile, renderSoundtrack, SoundPlayer, type MusicStyle } from '../three/audio';
 import { GLIDER_PRESETS, gliderChoice, PATTERN_LABEL, resetDesign, type GliderPresetId } from '../three/gliderDesigns';
 import { loadTerrain, loadTexture, MAP_SOURCES, paddedBounds, type MapSourceId, type Terrain, type TerrainTexture } from '../three/terrain';
+import { COMPANION_COLORS, companionOffset, type Companion } from '../three/companions';
+import { baseAt, loadCloudBase, M_PER_K_SPREAD, type CloudBaseSeries } from '../app/weather';
 
 const props = defineProps<{ id: number }>();
 const FPS = 30;
@@ -58,7 +60,30 @@ const opt = reactive({
   sinkThreshold: -2.5,
   decisions: true,
   profile: true,
+  /** minutes until the track fades out, 0 = keep */
+  fadeMin: 0,
+  triggers: true,
+  clouds: true,
+  cloudMode: 'api' as 'api' | 'flight' | 'manual',
+  cloudManual: 2500,
+  sunShadows: true,
+  sunInfo: true,
+  sunHourOffset: 0,
+  /** other day for the sun ('' = flight date) */
+  sunDate: '',
 });
+
+// --- further pilots in the same area
+interface OtherActivity { id: number; title: string; date: string; sameDay: boolean }
+const others = ref<OtherActivity[]>([]);
+/** selected further flights with their colour and glider */
+const companionSel = reactive<{ id: number; color: string; preset: GliderPresetId }[]>([]);
+let companions: Companion[] = [];
+const companionStatus = ref('');
+
+// --- cloud base
+const cloudSeries = shallowRef<CloudBaseSeries | null>(null);
+const cloudStatus = ref('');
 
 const box = ref<HTMLDivElement>();
 const canvas = ref<HTMLCanvasElement>();
@@ -71,7 +96,7 @@ const videoUrl = ref('');
 const poiVersion = ref(0);
 /** everything that changes the exported video; compared with the state of the last export */
 const settingsKey = computed(() =>
-  JSON.stringify([opt, gliderChoice.preset, gliderChoice.designs[gliderChoice.preset], i18n.lang, poiVersion.value, soundFileName.value]),
+  JSON.stringify([opt, gliderChoice.preset, gliderChoice.designs, i18n.lang, poiVersion.value, soundFileName.value, companionSel, !!cloudSeries.value]),
 );
 const exportedKey = ref('');
 const outdated = computed(() => !!videoUrl.value && exportedKey.value !== settingsKey.value);
@@ -95,24 +120,136 @@ onMounted(async () => {
     if (!rec.value) throw new Error(t('Aktivität nicht gefunden'));
     res.value = await analyzeRecord(rec.value);
     const tl = res.value.timeline;
-    progress.value = { label: 'Lade Höhenmodell', done: 0, total: 1 };
-    terrain.value = await loadTerrain(paddedBounds(tl.lat, tl.lon, 0.45, 10000), {
-      onProgress: (done, total) => (progress.value = { label: 'Lade Höhenmodell', done, total }),
-    });
+    await loadTerrainFor([tl]);
+    void listOthers();
     // precise ground for height above ground (same source as the dashboard); the mesh stays Terrarium
     try {
       ground.value = await groundProfile(`${props.id}:${rec.value.files.map((f) => f.text.length).join(',')}`, tl, (label, done, total) => (progress.value = { label, done, total }));
     } catch {
       ground.value = null;
     }
-    model = buildModel(res.value, terrain.value, ground.value?.ground);
+    model = buildModel(res.value, terrain.value!, ground.value?.ground);
     await applyTexture();
-    // POIs come from the internet and may be slow: the scene is rebuilt once they arrive
+    // POIs and the cloud base come from the internet and may be slow: the scene is rebuilt once they arrive
     loadPoisFor();
+    void loadCloudSeries();
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e);
     progress.value = null;
   }
+});
+
+/** Terrain around all given tracks (main flight plus further pilots) */
+async function loadTerrainFor(tracks: { lat: Float64Array; lon: Float64Array }[]) {
+  const lat = Float64Array.from(tracks.flatMap((x) => Array.from(x.lat)));
+  const lon = Float64Array.from(tracks.flatMap((x) => Array.from(x.lon)));
+  progress.value = { label: 'Lade Höhenmodell', done: 0, total: 1 };
+  terrain.value = await loadTerrain(paddedBounds(lat, lon, 0.45, 10000), {
+    onProgress: (done, total) => (progress.value = { label: 'Lade Höhenmodell', done, total }),
+  });
+}
+
+async function listOthers() {
+  const all = await db.activities.toArray();
+  const day = rec.value?.date;
+  others.value = all
+    .filter((a) => a.id !== props.id && a.summary?.sport !== 'hiking')
+    .map((a) => ({ id: a.id!, title: a.title, date: a.date, sameDay: a.date === day }))
+    .sort((a, b) => Number(b.sameDay) - Number(a.sameDay) || b.date.localeCompare(a.date));
+}
+
+function toggleCompanion(id: number, on: boolean) {
+  const k = companionSel.findIndex((c) => c.id === id);
+  if (on && k < 0) {
+    const used = new Set(companionSel.map((c) => c.color));
+    const presets = Object.keys(GLIDER_PRESETS) as GliderPresetId[];
+    companionSel.push({
+      id,
+      color: COMPANION_COLORS.find((c) => !used.has(c)) ?? COMPANION_COLORS[companionSel.length % COMPANION_COLORS.length],
+      preset: presets[(companionSel.length + 1) % presets.length],
+    });
+  } else if (!on && k >= 0) companionSel.splice(k, 1);
+}
+
+let compToken = 0;
+/** Analyses the selected flights; reloads the terrain when one of them leaves the current area */
+async function setupCompanions() {
+  if (!res.value || !terrain.value || !rec.value) return;
+  const token = ++compToken;
+  companionStatus.value = companionSel.length ? t('Lade weitere Flüge …') : '';
+  try {
+    const loaded = await Promise.all(companionSel.map(async (sel) => {
+      const r = await db.activities.get(sel.id);
+      if (!r) throw new Error(t('Aktivität nicht gefunden'));
+      return { sel, rec: r, res: await analyzeRecord(r) };
+    }));
+    if (token !== compToken) return;
+    const b = terrain.value.bounds;
+    const inside = loaded.every(({ res: r }) => r.timeline.lat.every((la, i) => la > b.south && la < b.north && r.timeline.lon[i] > b.west && r.timeline.lon[i] < b.east));
+    if (!inside) {
+      await loadTerrainFor([res.value.timeline, ...loaded.map((x) => x.res.timeline)]);
+      if (token !== compToken) return;
+      // the precise ground profile belongs to the main track and stays valid
+      model = buildModel(res.value, terrain.value!, ground.value?.ground);
+      textures.clear();
+    }
+    companions = loaded.map(({ sel, rec: r, res: cr }) => {
+      const cm = buildModel(cr, terrain.value!);
+      return { id: sel.id, name: cr.pilot || r.title, color: sel.color, design: { ...gliderChoice.designs[sel.preset] }, model: cm, ...companionOffset(model!, cm) };
+    });
+    const shifted = companions.filter((c) => c.aligned).map((c) => c.name);
+    companionStatus.value = shifted.length ? `${t('Nicht gleichzeitig geflogen, am Start ausgerichtet')}: ${shifted.join(', ')}` : '';
+    if (!inside) {
+      await applyTexture();
+      loadPoisFor();
+    } else rebuildScene();
+  } catch (e) {
+    if (token === compToken) companionStatus.value = `${t('Fehler')}: ${e instanceof Error ? e.message : e}`;
+  }
+}
+
+/** Hourly cloud base at the launch from archived temperature and dew point */
+async function loadCloudSeries() {
+  const m = model;
+  if (!m || cloudSeries.value || !opt.clouds || opt.cloudMode !== 'api') return;
+  const tl = m.res.timeline;
+  cloudStatus.value = t('Lade Temperatur und Taupunkt …');
+  try {
+    cloudSeries.value = await loadCloudBase(tl.lat[m.launchIdx], tl.lon[m.launchIdx], tl.t[m.launchIdx]);
+    cloudStatus.value = '';
+    rebuildScene();
+  } catch (e) {
+    cloudStatus.value = `${t('Wetterdaten nicht verfügbar, Basis aus dem Flug geschätzt')} (${e instanceof Error ? e.message : e})`;
+  }
+}
+
+/** Highest thermal top + 100 m: the pilot usually stops climbing a little below the base */
+const flightBase = computed(() => {
+  void plan.value;
+  const tops = model?.thermals.map((th) => th.topAlt) ?? [];
+  return tops.length ? Math.max(...tops) + 100 : null;
+});
+
+function cloudBaseFn(): ((t: number) => number) | null {
+  if (!opt.clouds) return null;
+  if (opt.cloudMode === 'manual') return () => opt.cloudManual;
+  const s = cloudSeries.value;
+  if (opt.cloudMode === 'api' && s) return (tt) => baseAt(s, tt);
+  const fb = flightBase.value;
+  return fb == null ? null : () => fb;
+}
+
+/** Cloud base at the time of the highest point, for the settings panel */
+const cloudInfo = computed(() => {
+  const s = cloudSeries.value;
+  const m = model;
+  if (!s || !m || !plan.value) return '';
+  let top = m.launchIdx;
+  for (let i = m.launchIdx; i <= m.landingIdx; i++) if (m.alt[i] > m.alt[top]) top = i;
+  const tt = m.res.timeline.t[top];
+  let k = 0;
+  for (let j = 1; j < s.t.length; j++) if (Math.abs(s.t[j] - tt) < Math.abs(s.t[k] - tt)) k = j;
+  return `${Math.round(baseAt(s, tt))} m · T ${s.temp[k].toFixed(1)} °C, Td ${s.dew[k].toFixed(1)} °C ${t('auf')} ${Math.round(s.elevation)} m (${s.source})`;
 });
 
 let poiToken = 0;
@@ -175,7 +312,14 @@ function rebuildScene() {
     pilotStyle: opt.pilotStyle,
     windOpacity: opt.windOpacity,
     pois,
-    layers: { thermals: opt.thermals, drift: opt.drift, glides: opt.glides, curtain: opt.curtain, wind: opt.wind, contours: opt.contours || opt.texture === 'relief', pois: opt.pois, particles: opt.particles },
+    companions,
+    fadeMin: opt.fadeMin,
+    sun: sunSettings(),
+    cloudBase: cloudBaseFn(),
+    layers: {
+      thermals: opt.thermals, drift: opt.drift, glides: opt.glides, curtain: opt.curtain, wind: opt.wind, contours: opt.contours || opt.texture === 'relief',
+      pois: opt.pois, particles: opt.particles, triggers: opt.triggers, clouds: opt.clouds,
+    },
   });
   rebuildPlan();
 }
@@ -198,8 +342,15 @@ function rebuildPlan() {
   resize();
 }
 
+function sunSettings() {
+  return { shadows: opt.sunShadows, info: opt.sunInfo, hourOffset: opt.sunHourOffset, date: opt.sunDate };
+}
+
 function hudOpts() {
-  return { title: rec.value?.title ?? '', enabled: opt.hud, decisions: opt.decisions, profile: opt.profile, panelOpacity: opt.panelOpacity };
+  return {
+    title: rec.value?.title ?? '', enabled: opt.hud, decisions: opt.decisions, profile: opt.profile, panelOpacity: opt.panelOpacity,
+    sun: sunSettings(), cloudBase: cloudBaseFn(), companions,
+  };
 }
 
 function resize() {
@@ -346,9 +497,12 @@ watch(gliderChoice, () => {
   clearTimeout(gliderTimer);
   gliderTimer = window.setTimeout(rebuildScene, 150);
 }, { deep: true });
-watch(() => [opt.exaggeration, opt.windOpacity, opt.particles, opt.thermals, opt.drift, opt.glides, opt.pois, opt.pilotStyle, opt.curtain, opt.wind, opt.contours, opt.gliderSize], rebuildScene);
+watch(() => [opt.exaggeration, opt.windOpacity, opt.particles, opt.thermals, opt.drift, opt.glides, opt.pois, opt.pilotStyle, opt.curtain, opt.wind, opt.contours, opt.gliderSize,
+  opt.fadeMin, opt.triggers, opt.clouds, opt.cloudMode, opt.cloudManual, opt.sunShadows, opt.sunHourOffset, opt.sunDate], rebuildScene);
+watch(() => [opt.clouds, opt.cloudMode], () => void loadCloudSeries());
+watch(() => companionSel.map((c) => [c.id, c.color, c.preset]), () => void setupCompanions(), { deep: true });
 watch(() => [opt.durationS, opt.highlights, opt.camDistance, opt.format], rebuildPlan);
-watch(() => [opt.hud, opt.decisions, opt.profile, opt.panelOpacity], () => {
+watch(() => [opt.hud, opt.decisions, opt.profile, opt.panelOpacity, opt.sunInfo], () => {
   if (preview) preview.hud = hudOpts();
   draw();
 });
@@ -478,6 +632,54 @@ onUnmounted(() => {
             <button class="link" @click="resetDesign(gliderChoice.preset)">{{ t('zurücksetzen') }}</button></p>
         </fieldset>
         <fieldset>
+          <legend>{{ t('Weitere Piloten') }}</legend>
+          <p v-if="!others.length" class="muted small">{{ t('Keine weiteren Flüge gespeichert. Weitere IGC-Dateien in der Übersicht importieren.') }}</p>
+          <div v-else class="others">
+            <div v-for="a in others" :key="a.id" class="other">
+              <label class="check">
+                <input type="checkbox" :checked="companionSel.some((c) => c.id === a.id)" :disabled="exporting" @change="toggleCompanion(a.id, ($event.target as HTMLInputElement).checked)" />
+                <span>{{ a.title }} <span class="muted">· {{ a.date }}{{ a.sameDay ? ` · ${t('gleicher Tag')}` : '' }}</span></span>
+              </label>
+              <template v-for="c in companionSel.filter((x) => x.id === a.id)" :key="c.id">
+                <div class="other-opts">
+                  <input v-model="c.color" type="color" :title="t('Farbe der Flugspur')" />
+                  <select v-model="c.preset" :disabled="exporting">
+                    <option v-for="(d, k) in GLIDER_PRESETS" :key="k" :value="k as GliderPresetId">{{ t(d.name) }}</option>
+                  </select>
+                </div>
+              </template>
+            </div>
+          </div>
+          <p v-if="companionStatus" class="muted small">{{ companionStatus }}</p>
+        </fieldset>
+        <fieldset>
+          <legend>{{ t('Sonne & Wolken') }}</legend>
+          <label class="check"><input v-model="opt.sunShadows" type="checkbox" /> {{ t('Schattenwurf nach Sonnenstand (Schirm und Berge)') }}</label>
+          <label class="check"><input v-model="opt.sunInfo" type="checkbox" :disabled="!opt.hud" /> {{ t('Sonnenstand und Einstrahlung einblenden') }}</label>
+          <label>{{ t('Tageszeit verschieben') }}: {{ opt.sunHourOffset > 0 ? '+' : '' }}{{ opt.sunHourOffset }} h
+            <input v-model.number="opt.sunHourOffset" type="range" min="-6" max="6" step="0.5" />
+          </label>
+          <label>{{ t('Anderes Datum (Jahreszeit)') }}
+            <span class="pair"><input v-model="opt.sunDate" type="date" /><button v-if="opt.sunDate" @click="opt.sunDate = ''">{{ t('Flugtag') }}</button></span>
+          </label>
+          <label class="check"><input v-model="opt.clouds" type="checkbox" /> {{ t('Cumulus an der Wolkenbasis über den Thermiken') }}</label>
+          <label>{{ t('Wolkenbasis') }}
+            <select v-model="opt.cloudMode" :disabled="!opt.clouds">
+              <option value="api">{{ t('Berechnet aus Temperatur-Archiv (Open-Meteo)') }}</option>
+              <option value="flight">{{ t('Aus dem Flug (höchste Thermik + 100 m)') }}</option>
+              <option value="manual">{{ t('Manuell') }}</option>
+            </select>
+          </label>
+          <label v-if="opt.cloudMode === 'manual'">{{ opt.cloudManual }} m
+            <input v-model.number="opt.cloudManual" type="range" min="800" max="5000" step="50" :disabled="!opt.clouds" />
+          </label>
+          <p v-if="opt.clouds" class="muted small">
+            <template v-if="opt.cloudMode === 'api' && cloudInfo">{{ t('Basis') }} {{ cloudInfo }} – {{ t('Formel') }}: {{ t('Höhe') }} + {{ M_PER_K_SPREAD }} m × (T − Td).</template>
+            <template v-if="flightBase"> {{ t('Höchste Thermik im Flug') }}: {{ Math.round(flightBase - 100) }} m.</template>
+            {{ cloudStatus }}
+          </p>
+        </fieldset>
+        <fieldset>
           <legend>{{ t('Ton') }}</legend>
           <label>{{ t('Musik') }}
             <select v-model="opt.music" :disabled="exporting">
@@ -485,6 +687,10 @@ onUnmounted(() => {
               <option value="ambient">{{ t('Ambient (ruhig, Flächen)') }}</option>
               <option value="cinematic">{{ t('Cinematic (Puls, steigert sich)') }}</option>
               <option value="chill">{{ t('Chill (E-Piano, Beat)') }}</option>
+              <option value="lofi">{{ t('Lo-Fi Hip-Hop (Jazz-Akkorde, Vinyl)') }}</option>
+              <option value="synthwave">{{ t('Synthwave (80er, Arpeggio, treibend)') }}</option>
+              <option value="house">{{ t('Deep House (Four-on-the-floor, pumpend)') }}</option>
+              <option value="dnb">{{ t('Liquid Drum & Bass (schnell, luftig)') }}</option>
               <option value="file" :disabled="!soundFileName">{{ t('Eigene Datei') }}{{ soundFileName ? `: ${soundFileName}` : '' }}</option>
             </select>
           </label>
@@ -511,6 +717,11 @@ onUnmounted(() => {
           <legend>{{ t('Lern-Ebenen') }}</legend>
           <label class="check"><input v-model="opt.thermals" type="checkbox" /> {{ t('Thermiktrichter mit Steigwert') }}</label>
           <label class="check"><input v-model="opt.drift" type="checkbox" :disabled="!opt.thermals" /> {{ t('Trichter-Versatz durch Wind (Drift der Kreismittelpunkte)') }}</label>
+          <label class="check"><input v-model="opt.triggers" type="checkbox" :disabled="!opt.thermals" /> {{ t('Thermik-Auslöser: Achse bis zum Boden verlängert') }}</label>
+          <label>{{ t('Flugspur verblasst nach') }}: {{ opt.fadeMin ? `${opt.fadeMin} min` : t('nie') }}
+            <input v-model.number="opt.fadeMin" type="range" min="0" max="30" step="1" />
+          </label>
+          <p v-if="opt.fadeMin" class="muted small">{{ t('Thermikkreise bleiben stehen, am Schluss wird die ganze Spur gezeigt.') }}</p>
           <label class="check"><input v-model="opt.glides" type="checkbox" /> {{ t('Gleitzahl auf Gleitstrecken (ab 2 km)') }}</label>
           <label class="check"><input v-model="opt.particles" type="checkbox" /> {{ t('Luftströmung in starken Thermiken und beim Steigen im Geradeausflug') }}</label>
           <label class="check"><input v-model="opt.pois" type="checkbox" /> {{ t('Gipfel, Hütten und Orte mit Infotafel') }}</label>
@@ -574,6 +785,11 @@ label input[type=range] { accent-color: var(--accent); }
 .colors input[type=color] { width: 100%; height: 28px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: none; cursor: pointer; }
 button.link { background: none; border: none; padding: 0 4px; color: var(--accent); cursor: pointer; font-size: 12px; }
 .small { font-size: 12px; margin: 0; }
+.others { display: flex; flex-direction: column; gap: 8px; max-height: 260px; overflow-y: auto; }
+.other { display: flex; flex-direction: column; gap: 6px; }
+.other-opts { display: flex; gap: 8px; padding-left: 24px; }
+.other-opts input[type=color] { width: 40px; height: 28px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: none; flex: none; }
+.other-opts select { flex: 1; min-width: 0; }
 .error { color: #ff6b6b; }
 @media (max-width: 1000px) { .body { grid-template-columns: 1fr; } .settings { position: static; } }
 </style>

@@ -5,6 +5,8 @@
  * Everything lives in a local metric frame: x = east, z = -north (three.js convention), y = up.
  */
 
+import { drawOsm, loadOsmLines, shadeRelief } from '../app/relief';
+
 const R = 6378137;
 const RAD = Math.PI / 180;
 
@@ -162,7 +164,15 @@ export const MAP_SOURCES = {
     maxZoom: 15,
     attribution: '© OpenStreetMap',
   },
-} satisfies Record<string, { label: string; layers: TileUrl[]; maxZoom: number; attribution: string }>;
+  shaded: {
+    label: 'Relief (Höhenfarben + OSM)',
+    // computed here from the elevation tiles, see reliefTexture
+    layers: [],
+    maxZoom: 14,
+    attribution: 'Terrain Tiles (AWS), © OpenStreetMap',
+    generated: true,
+  },
+} satisfies Record<string, { label: string; layers: TileUrl[]; maxZoom: number; attribution: string; generated?: boolean }>;
 
 export type MapSourceId = keyof typeof MAP_SOURCES;
 
@@ -182,7 +192,9 @@ export async function loadTexture(
   const z = pickZoom(t.bounds, opts.textureTiles ?? 16, src.maxZoom);
   const total = tileCount(t.bounds, z);
   let done = 0;
-  const m = await mosaic(t.bounds, z, src.layers, () => opts.onProgress?.(++done, total));
+  const m = 'generated' in src
+    ? await reliefTexture(t.bounds, z, () => opts.onProgress?.(++done, total))
+    : await mosaic(t.bounds, z, src.layers, () => opts.onProgress?.(++done, total));
   const uv = new Float32Array(t.nx * t.nz * 2);
   for (let j = 0; j < t.nz; j++) {
     const zz = t.minZ + ((t.maxZ - t.minZ) * j) / (t.nz - 1);
@@ -196,6 +208,33 @@ export async function loadTexture(
     }
   }
   return { source, canvas: m.canvas, uv };
+}
+
+/**
+ * Relief map at zoom z: elevation tiles coloured by height and hillshaded, then OSM water, roads and
+ * borders drawn on top (left out when Overpass is not reachable).
+ */
+async function reliefTexture(b: Bounds, z: number, onTile: () => void): Promise<Mosaic> {
+  const m = await mosaic(b, z, DEM_URL, onTile);
+  const g = m.canvas.getContext('2d')!;
+  const img = g.getImageData(0, 0, m.w, m.h);
+  const px = img.data;
+  const h = new Float32Array(m.w * m.h);
+  for (let i = 0; i < h.length; i++) h[i] = px[i * 4] * 256 + px[i * 4 + 1] + px[i * 4 + 2] / 256 - 32768;
+  const midLat = (b.north + b.south) / 2;
+  // the 3D scene adds its own sun lighting: a light touch of shading is enough
+  shadeRelief(h, m.w, m.h, (2 * Math.PI * R * Math.cos(midLat * RAD)) / (256 * 2 ** z), px, 0.45);
+  g.putImageData(img, 0, 0);
+  try {
+    const lines = await loadOsmLines(b);
+    drawOsm(g, lines, ([lon, lat]) => {
+      const [x, y] = mercPx(lat, lon, z);
+      return [x - m.x0 * 256, y - m.y0 * 256];
+    }, Math.max(1, m.w / 2500));
+  } catch (e) {
+    console.warn('OSM overlay for the relief map not available', e);
+  }
+  return m;
 }
 
 export async function loadTerrain(b: Bounds, opts: TerrainOptions = {}): Promise<Terrain> {

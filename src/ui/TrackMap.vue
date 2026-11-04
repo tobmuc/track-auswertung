@@ -6,6 +6,7 @@ import { colorBucket, type ColorMode } from '../app/colors';
 import type { ActivityResult } from '../app/types';
 import type { XcScore } from '../core';
 import { t } from '../app/i18n';
+import { loadOsmLines, RELIEF_STOPS, type OsmLine } from '../app/relief';
 
 const props = defineProps<{
   result: ActivityResult;
@@ -41,7 +42,9 @@ const BASEMAPS = {
     maxzoom: 19,
   },
 } as const;
-type Basemap = keyof typeof BASEMAPS;
+type Basemap = keyof typeof BASEMAPS | 'relief';
+/** layers of the relief map: colours and hillshade from the elevation tiles, OSM lines on top */
+const RELIEF_LAYERS = ['relief-color', 'relief-shade', 'osm-water', 'osm-river', 'osm-road', 'osm-border'];
 
 const el = ref<HTMLDivElement>();
 const basemap = ref<Basemap>('satellite');
@@ -55,6 +58,8 @@ let loaded = false;
 function applyVisibility() {
   if (!map || !loaded) return;
   for (const k of Object.keys(BASEMAPS)) map.setLayoutProperty(`base-${k}`, 'visibility', k === basemap.value ? 'visible' : 'none');
+  for (const id of RELIEF_LAYERS) map.setLayoutProperty(id, 'visibility', basemap.value === 'relief' ? 'visible' : 'none');
+  if (basemap.value === 'relief') void loadOsm();
   map.setLayoutProperty('labels', 'visibility', labels.value ? 'visible' : 'none');
 }
 
@@ -79,6 +84,10 @@ function style(): StyleSpecification {
     maxzoom: 14,
     attribution: 'Terrain Tiles (Mapzen/AWS)',
   };
+  // own source for the relief: MapLibre advises against sharing one DEM source between terrain and hillshade
+  sources.demRelief = { ...sources.dem, attribution: 'Terrain Tiles (Mapzen/AWS)' };
+  sources.osm = { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, attribution: '© OpenStreetMap' };
+  const rv = basemap.value === 'relief' ? ('visible' as const) : ('none' as const);
   return {
     version: 8,
     sources,
@@ -89,9 +98,51 @@ function style(): StyleSpecification {
         source: k,
         layout: { visibility: k === basemap.value ? ('visible' as const) : ('none' as const) },
       })),
+      {
+        id: 'relief-color', type: 'color-relief' as const, source: 'demRelief', layout: { visibility: rv },
+        paint: { 'color-relief-color': ['interpolate', ['linear'], ['elevation'], ...RELIEF_STOPS.flat()] as never },
+      },
+      {
+        id: 'relief-shade', type: 'hillshade' as const, source: 'demRelief', layout: { visibility: rv },
+        paint: { 'hillshade-shadow-color': '#3a2d22', 'hillshade-highlight-color': 'rgba(255,255,255,0.35)', 'hillshade-exaggeration': 0.5, 'hillshade-illumination-direction': 315 },
+      },
+      { id: 'osm-water', type: 'fill' as const, source: 'osm', filter: ['==', ['get', 'kind'], 'water'], layout: { visibility: rv },
+        paint: { 'fill-color': '#7fb3dc', 'fill-outline-color': '#5b97c9' } },
+      { id: 'osm-river', type: 'line' as const, source: 'osm', filter: ['==', ['get', 'kind'], 'river'], layout: { visibility: rv },
+        paint: { 'line-color': '#5b97c9', 'line-width': 1.6 } },
+      { id: 'osm-road', type: 'line' as const, source: 'osm', filter: ['==', ['get', 'kind'], 'road'], layout: { visibility: rv, 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': ['case', ['<=', ['get', 'rank'], 1], 'rgba(255,236,170,.95)', 'rgba(255,255,255,.85)'], 'line-width': ['-', 2.6, ['*', 0.45, ['get', 'rank']]] } },
+      { id: 'osm-border', type: 'line' as const, source: 'osm', filter: ['==', ['get', 'kind'], 'border'], layout: { visibility: rv },
+        paint: { 'line-color': 'rgba(255,255,255,.9)', 'line-width': ['case', ['==', ['get', 'rank'], 0], 2.2, 1.4], 'line-dasharray': [4, 3] } },
       { id: 'labels', type: 'raster' as const, source: 'labels', layout: { visibility: labels.value ? ('visible' as const) : ('none' as const) } },
     ],
   };
+}
+
+let osmLoading = false;
+/** OSM water, roads and borders around the track, loaded once the relief map is first shown */
+async function loadOsm() {
+  if (osmLoading || !map) return;
+  osmLoading = true;
+  const tl = props.result.timeline;
+  let w = 180, e = -180, s = 90, n = -90;
+  for (let i = 0; i < tl.t.length; i++) {
+    w = Math.min(w, tl.lon[i]); e = Math.max(e, tl.lon[i]);
+    s = Math.min(s, tl.lat[i]); n = Math.max(n, tl.lat[i]);
+  }
+  const mx = Math.max(0.05, (e - w) * 0.25), my = Math.max(0.04, (n - s) * 0.25);
+  try {
+    const lines: OsmLine[] = await loadOsmLines({ west: w - mx, east: e + mx, south: s - my, north: n + my });
+    const features = lines.map((l): GeoJSON.Feature => ({
+      type: 'Feature',
+      properties: { kind: l.kind, rank: l.rank },
+      geometry: l.kind === 'water' ? { type: 'Polygon', coordinates: [l.coords] } : { type: 'LineString', coordinates: l.coords },
+    }));
+    (map?.getSource('osm') as GeoJSONSource | undefined)?.setData({ type: 'FeatureCollection', features });
+  } catch (err) {
+    console.warn('OSM lines for the relief map not available', err);
+    osmLoading = false;
+  }
 }
 
 function trackGeoJSON(): GeoJSON.FeatureCollection {
@@ -257,6 +308,7 @@ function applyTerrain(on: boolean) {
     <div ref="el" class="map" />
     <div class="controls">
       <button v-for="(b, k) in BASEMAPS" :key="k" :class="{ active: basemap === k }" @click="basemap = k">{{ t(b.label) }}</button>
+      <button :class="{ active: basemap === 'relief' }" @click="basemap = 'relief'">{{ t('Relief') }}</button>
       <button :class="{ active: labels }" @click="labels = !labels">{{ t('Beschriftung') }}</button>
       <button :class="{ active: terrain }" @click="terrain = !terrain">{{ t('3D-Gelände') }}</button>
     </div>

@@ -8,7 +8,7 @@
 import type { Plan } from './director';
 import { lerpAt, type Model } from './model';
 
-export type MusicStyle = 'none' | 'ambient' | 'cinematic' | 'chill' | 'file';
+export type MusicStyle = 'none' | 'ambient' | 'cinematic' | 'chill' | 'synthwave' | 'lofi' | 'house' | 'dnb' | 'file';
 
 export interface SoundOptions {
   music: MusicStyle;
@@ -181,11 +181,121 @@ function hat(ctx: BaseAudioContext, out: AudioNode, noise: AudioBuffer, t0: numb
   s.start(t0, (t0 * 7.31) % 0.5, 0.08);
 }
 
+/** Snare: band-passed noise burst plus a short tonal body */
+function snare(ctx: BaseAudioContext, out: AudioNode, noise: AudioBuffer, t0: number, level: number, tone = 1800, decay = 0.18) {
+  const s = ctx.createBufferSource();
+  s.buffer = noise;
+  const bp = ctx.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.frequency.value = tone;
+  bp.Q.value = 0.7;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(level, t0);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + decay);
+  s.connect(bp).connect(g).connect(out);
+  s.start(t0, (t0 * 3.17) % 0.5, decay + 0.02);
+  const o = ctx.createOscillator();
+  o.type = 'triangle';
+  o.frequency.setValueAtTime(220, t0);
+  o.frequency.exponentialRampToValueAtTime(150, t0 + 0.08);
+  const og = ctx.createGain();
+  og.gain.setValueAtTime(level * 0.6, t0);
+  og.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.1);
+  o.connect(og).connect(out);
+  o.start(t0);
+  o.stop(t0 + 0.12);
+}
+
+/** Clap: three quick noise bursts and a short tail */
+function clap(ctx: BaseAudioContext, out: AudioNode, noise: AudioBuffer, t0: number, level: number) {
+  const bp = ctx.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.frequency.value = 1200;
+  bp.Q.value = 1.2;
+  bp.connect(out);
+  [0, 0.011, 0.023].forEach((dt, k) => {
+    const s = ctx.createBufferSource();
+    s.buffer = noise;
+    const g = ctx.createGain();
+    const t = t0 + dt;
+    g.gain.setValueAtTime(level, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + (k === 2 ? 0.16 : 0.012));
+    s.connect(g).connect(bp);
+    s.start(t, ((t0 + dt) * 5.71) % 0.5, 0.2);
+  });
+}
+
+/** Synth note: oscillator through a lowpass whose cutoff opens and closes with each note */
+function synth(ctx: BaseAudioContext, out: AudioNode, note: number, t0: number, dur: number, level: number, cutoff: number, type: OscillatorType = 'sawtooth', detune = 0) {
+  const lp = ctx.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.Q.value = 3;
+  lp.frequency.setValueAtTime(cutoff * 3, t0);
+  lp.frequency.exponentialRampToValueAtTime(Math.max(80, cutoff), t0 + Math.min(dur, 0.25));
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0, t0);
+  g.gain.linearRampToValueAtTime(level, t0 + 0.006);
+  g.gain.setValueAtTime(level, t0 + dur * 0.8);
+  g.gain.linearRampToValueAtTime(0, t0 + dur);
+  lp.connect(g).connect(out);
+  for (const d of detune ? [-detune, detune] : [0]) {
+    const o = ctx.createOscillator();
+    o.type = type;
+    o.frequency.value = midi(note);
+    o.detune.value = d;
+    o.connect(lp);
+    o.start(t0);
+    o.stop(t0 + dur + 0.02);
+  }
+}
+
+/** Sidechain feel: the bus ducks on every kick and swells back within the beat */
+function duck(g: GainNode, kicks: number[], beat: number, depth: number) {
+  for (const t of kicks) {
+    g.gain.setValueAtTime(1 - depth, t);
+    g.gain.linearRampToValueAtTime(1, t + beat * 0.7);
+  }
+}
+
+/** Vinyl crackle: sparse clicks plus low hiss, for the lo-fi style */
+function crackle(ctx: BaseAudioContext, out: AudioNode, noise: AudioBuffer, dur: number) {
+  const hiss = ctx.createBufferSource();
+  hiss.buffer = noise;
+  hiss.loop = true;
+  const lp = ctx.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.value = 2500;
+  const hg = ctx.createGain();
+  hg.gain.value = 0.012;
+  hiss.connect(lp).connect(hg).connect(out);
+  hiss.start(0);
+  hiss.stop(dur + 3);
+  let seed = 4242;
+  const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  for (let t = 0; t < dur; t += 0.05 + rnd() * 0.35) {
+    const s = ctx.createBufferSource();
+    s.buffer = noise;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.03 + 0.05 * rnd(), t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.004);
+    s.connect(g).connect(out);
+    s.start(t, rnd() * 0.9, 0.01);
+  }
+}
+
 /** Composes background music of the given style into `out`; deterministic per style */
+/** Output level per style, so all of them sound about equally loud (measured RMS ≈ 0.035 at volume 0.6) */
+const STYLE_LEVEL: Partial<Record<MusicStyle, number>> = { synthwave: 0.55, house: 0.65, dnb: 0.38 };
+
 function compose(ctx: BaseAudioContext, out: AudioNode, style: Exclude<MusicStyle, 'none' | 'file'>, dur: number) {
-  const wet = reverb(ctx, style === 'chill' ? 1.8 : 3.8);
+  const level = ctx.createGain();
+  level.gain.value = STYLE_LEVEL[style] ?? 1;
+  level.connect(out);
+  out = level;
+  const dry = style === 'chill' || style === 'lofi' || style === 'house';
+  const wet = reverb(ctx, dry ? 1.8 : style === 'synthwave' ? 2.8 : 3.8);
   const wetGain = ctx.createGain();
-  wetGain.gain.value = style === 'chill' ? 0.25 : 0.55;
+  wetGain.gain.value = dry ? 0.25 : style === 'dnb' || style === 'synthwave' ? 0.4 : 0.55;
   wet.connect(wetGain).connect(out);
   const bus = ctx.createGain();
   bus.connect(out);
@@ -215,6 +325,112 @@ function compose(ctx: BaseAudioContext, out: AudioNode, style: Exclude<MusicStyl
       for (let e = t; e < Math.min(dur, t + len); e += eighth) {
         pluck(ctx, bus, ch[Math.round((e - t) / eighth) % 2 === 0 ? 0 : 1] + 12, e, 0.06, 0.28, 'triangle');
       }
+    }
+  } else if (style === 'synthwave') {
+    // 100 bpm, A minor – F – C – G: saw pads, 16th arpeggio opening up over the flight,
+    // driving eighth bass, big snare on 2 and 4; drums enter after two bars
+    const beat = 60 / 100;
+    const noise = noiseBuffer(ctx);
+    const chords = [[57, 60, 64], [53, 57, 60], [48, 52, 55], [55, 59, 62]];
+    for (let bar = 0, t = 0; t < dur; bar++, t += beat * 4) {
+      const ch = chords[bar % chords.length];
+      const u = t / dur;
+      pad(ctx, bus, ch.map((n) => n + 12), t, beat * 4, 0.035, 1600 + 1400 * u);
+      for (let e = 0; e < 16; e++) {
+        synth(ctx, bus, ch[e % 3] + (e % 6 < 3 ? 24 : 12), t + (e * beat) / 4, beat / 4.5, 0.035, 900 + 2200 * u, 'square');
+      }
+      for (let e = 0; e < 8; e++) synth(ctx, bus, ch[0] - 12, t + (e * beat) / 2, beat / 2.2, 0.12, 300 + 200 * u, 'sawtooth', 8);
+      if (bar < 2) continue;
+      for (let b = 0; b < 4; b++) {
+        kick(ctx, bus, t + b * beat, 0.5);
+        hat(ctx, bus, noise, t + b * beat + beat / 2, 0.06);
+      }
+      snare(ctx, wet, noise, t + beat, 0.35, 1500, 0.25);
+      snare(ctx, wet, noise, t + 3 * beat, 0.35, 1500, 0.25);
+      snare(ctx, bus, noise, t + beat, 0.2);
+      snare(ctx, bus, noise, t + 3 * beat, 0.2);
+    }
+  } else if (style === 'lofi') {
+    // 74 bpm lo-fi hip-hop: jazzy ninth chords on a wobbly e-piano, swung hats, boom-bap drums,
+    // everything dulled through a lowpass, vinyl crackle on top
+    const beat = 60 / 74;
+    const swing = beat * 0.16;
+    const noise = noiseBuffer(ctx);
+    const dull = ctx.createBiquadFilter();
+    dull.type = 'lowpass';
+    dull.frequency.value = 3200;
+    dull.connect(bus);
+    crackle(ctx, out, noise, dur);
+    // Dm9 – G13 – Cmaj9 – A7(b9)
+    const chords = [[50, 53, 57, 60, 64], [43, 53, 59, 64, 65], [48, 52, 55, 59, 62], [45, 55, 58, 61, 64]];
+    for (let bar = 0, t = 0; t < dur; bar++, t += beat * 4) {
+      const ch = chords[bar % chords.length];
+      ch.slice(1).forEach((nn, k) => pluck(ctx, dull, nn, t + k * 0.018, 0.045, beat * 3.2));
+      pluck(ctx, dull, ch[1] + 12, t + beat * 2.5 + swing, 0.03, beat);
+      pluck(ctx, dull, ch[0] - 12, t, 0.25, beat * 1.8);
+      pluck(ctx, dull, ch[0] - 12, t + beat * 2.5 + swing, 0.18, beat);
+      if (bar < 1) continue;
+      kick(ctx, dull, t, 0.55);
+      kick(ctx, dull, t + beat * 1.5 + swing, 0.35);
+      kick(ctx, dull, t + beat * 2.5 + swing, 0.45);
+      snare(ctx, dull, noise, t + beat, 0.22, 1400, 0.16);
+      snare(ctx, dull, noise, t + beat * 3, 0.22, 1400, 0.16);
+      for (let e = 0; e < 8; e++) hat(ctx, dull, noise, t + (e * beat) / 2 + (e % 2 ? swing : 0), e % 2 ? 0.035 : 0.06);
+    }
+  } else if (style === 'house') {
+    // 122 bpm deep house: four-on-the-floor, offbeat open hats, clap on 2 and 4,
+    // minor-seventh stabs on the offbeats that duck under the kick, rolling offbeat bass
+    const beat = 60 / 122;
+    const noise = noiseBuffer(ctx);
+    const pump = ctx.createGain();
+    pump.connect(bus);
+    const kicks: number[] = [];
+    // Am7 – Dm7 – Fmaj7 – Em7, two bars each
+    const chords = [[57, 60, 64, 67], [50, 53, 57, 60], [53, 57, 60, 64], [52, 55, 59, 62]];
+    for (let bar = 0, t = 0; t < dur; bar++, t += beat * 4) {
+      const ch = chords[Math.floor(bar / 2) % chords.length];
+      const u = t / dur;
+      pad(ctx, pump, ch, t, beat * 4, 0.025, 900 + 900 * u);
+      for (let b = 0; b < 4; b++) {
+        const off = t + b * beat + beat / 2;
+        for (const nn of ch) synth(ctx, pump, nn + 12, off, beat * 0.3, 0.022, 1200 + 1800 * u, 'sawtooth');
+        synth(ctx, pump, ch[0] - 24 + (b === 3 ? 7 : 0), off, beat * 0.4, 0.2, 260, 'sawtooth');
+      }
+      if (bar < 2) continue;
+      for (let b = 0; b < 4; b++) {
+        kick(ctx, bus, t + b * beat, 0.6);
+        kicks.push(t + b * beat);
+        hat(ctx, bus, noise, t + b * beat + beat / 2, 0.09);
+        for (const q of [0.25, 0.75]) hat(ctx, bus, noise, t + (b + q) * beat, 0.025);
+      }
+      clap(ctx, bus, noise, t + beat, 0.25);
+      clap(ctx, bus, noise, t + 3 * beat, 0.25);
+    }
+    duck(pump, kicks, beat, 0.6);
+  } else if (style === 'dnb') {
+    // 172 bpm liquid drum & bass: two-step break, rolling sixteenth hats, deep sub bass,
+    // airy pads and bright piano notes over a half-time harmony
+    const beat = 60 / 172;
+    const noise = noiseBuffer(ctx);
+    // Fmaj7 – Em7 – Dm9 – Cmaj7, two bars each
+    const chords = [[53, 57, 60, 64], [52, 55, 59, 62], [50, 53, 57, 64], [48, 52, 55, 59]];
+    for (let bar = 0, t = 0; t < dur; bar++, t += beat * 4) {
+      const ch = chords[Math.floor(bar / 2) % chords.length];
+      if (bar % 2 === 0) {
+        pad(ctx, bus, ch.map((n) => n + 12), t, beat * 8, 0.03, 2200);
+        synth(ctx, bus, ch[0] - 24, t, beat * 7.6, 0.22, 140, 'sine');
+      }
+      for (const [k, at] of [[0, 0], [2, 1.5], [3, 3]] as const) pluck(ctx, bus, ch[k] + 24, t + at * beat, 0.04, 1.4);
+      if (bar < 4) {
+        for (let e = 0; e < 8; e++) hat(ctx, bus, noise, t + (e * beat) / 2, 0.03);
+        continue;
+      }
+      kick(ctx, bus, t, 0.55);
+      kick(ctx, bus, t + beat * 2.5, 0.45);
+      snare(ctx, bus, noise, t + beat, 0.3, 1900, 0.15);
+      snare(ctx, bus, noise, t + beat * 3, 0.3, 1900, 0.15);
+      snare(ctx, bus, noise, t + beat * 3.75, 0.08, 2200, 0.08);
+      for (let e = 0; e < 16; e++) hat(ctx, bus, noise, t + (e * beat) / 4, e % 4 === 2 ? 0.07 : 0.035);
     }
   } else {
     // chill: 84 bpm, e-piano chords, bass, soft kick and hats

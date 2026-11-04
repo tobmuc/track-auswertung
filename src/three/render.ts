@@ -14,6 +14,9 @@ export class FrameRenderer {
   constructor(private scene: FlightScene, private m: Model, public plan: Plan, public hud: HudOptions, out?: HTMLCanvasElement) {
     this.gl = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, logarithmicDepthBuffer: true });
     this.gl.outputColorSpace = THREE.SRGBColorSpace;
+    // only used when the scene asks for sun shadows
+    this.gl.shadowMap.enabled = true;
+    this.gl.shadowMap.type = THREE.PCFSoftShadowMap;
     this.out = out ?? document.createElement('canvas');
     this.ctx = this.out.getContext('2d')!;
   }
