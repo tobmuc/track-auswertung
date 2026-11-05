@@ -176,6 +176,24 @@ export const MAP_SOURCES = {
 
 export type MapSourceId = keyof typeof MAP_SOURCES;
 
+/** kk7 asks every request to name the site; its check wants a domain with a dot */
+export const KK7_SRC = encodeURIComponent(
+  typeof location !== 'undefined' && location.hostname.includes('.') ? location.hostname : 'track-auswertung.localhost',
+);
+export type Kk7Overlay = 'thermals' | 'skyways';
+const KK7_OVERLAYS: Record<Kk7Overlay, { maxZoom: number; alpha: number; url: TileUrl }> = {
+  skyways: {
+    maxZoom: 13,
+    alpha: 0.8,
+    url: (z, x, y) => `https://thermal.kk7.ch/tiles/skyways_all_all/${z}/${x}/${(1 << z) - 1 - y}.png?src=${KK7_SRC}`,
+  },
+  thermals: {
+    maxZoom: 12,
+    alpha: 0.75,
+    url: (z, x, y) => `https://thermal.kk7.ch/tiles/thermals_all_all/${z}/${x}/${(1 << z) - 1 - y}.png?src=${KK7_SRC}`,
+  },
+};
+
 function tileCount(b: Bounds, z: number) {
   const [x0, y0] = mercPx(b.north, b.west, z);
   const [x1, y1] = mercPx(b.south, b.east, z);
@@ -186,15 +204,29 @@ function tileCount(b: Bounds, z: number) {
 export async function loadTexture(
   t: Terrain,
   source: MapSourceId,
-  opts: { textureTiles?: number; onProgress?: (done: number, total: number) => void } = {},
+  opts: { textureTiles?: number; overlays?: Kk7Overlay[]; onProgress?: (done: number, total: number) => void } = {},
 ): Promise<TerrainTexture> {
   const src = MAP_SOURCES[source];
   const z = pickZoom(t.bounds, opts.textureTiles ?? 16, src.maxZoom);
-  const total = tileCount(t.bounds, z);
+  const overlays = opts.overlays ?? [];
+  const total = tileCount(t.bounds, z) + overlays.reduce((a, k) => a + tileCount(t.bounds, Math.min(z, KK7_OVERLAYS[k].maxZoom)), 0);
   let done = 0;
   const m = 'generated' in src
     ? await reliefTexture(t.bounds, z, () => opts.onProgress?.(++done, total))
     : await mosaic(t.bounds, z, src.layers, () => opts.onProgress?.(++done, total));
+  if (overlays.length) {
+    const ctx = m.canvas.getContext('2d')!;
+    for (const k of overlays) {
+      const ov = KK7_OVERLAYS[k];
+      const kz = Math.min(m.z, ov.maxZoom);
+      const km = await mosaic(t.bounds, kz, ov.url, () => opts.onProgress?.(++done, total));
+      const scale = 2 ** (m.z - kz);
+      ctx.save();
+      ctx.globalAlpha = ov.alpha;
+      ctx.drawImage(km.canvas, (km.x0 * scale - m.x0) * 256, (km.y0 * scale - m.y0) * 256, km.w * scale, km.h * scale);
+      ctx.restore();
+    }
+  }
   const uv = new Float32Array(t.nx * t.nz * 2);
   for (let j = 0; j < t.nz; j++) {
     const zz = t.minZ + ((t.maxZ - t.minZ) * j) / (t.nz - 1);

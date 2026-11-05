@@ -99,7 +99,8 @@ und bei Rückenwind beschleunigt wurde.
 ### Karte und Höhenprofil
 
 Kartengrundlagen sind Satellit, Sentinel-2, Topo, Strasse und eine Reliefkarte aus offenen Daten mit
-Höhenfarben, Schummerung, Gewässern und Strassen. Beschriftungen und 3D-Gelände lassen sich zuschalten.
+Höhenfarben, Schummerung, Gewässern und Strassen. Beschriftungen, 3D-Gelände sowie Thermik-Hotspots und
+Skyways von thermal.kk7.ch lassen sich zuschalten.
 Die Spur ist nach Flugphase, Steigen oder Geschwindigkeit eingefärbt. Das Höhenprofil zeigt das Gelände
 darunter; die Höhe über Grund kommt aus Terrain Tiles, OpenTopography oder eigenen DEM-Dateien.
 
@@ -144,17 +145,18 @@ Drum & Bass. Eigene Musikdateien gehen auch. Vario-Töne folgen dem Steigen und 
 Tracks, Auswertungen und Einstellungen liegen im Speicher deines Browsers (IndexedDB). Wenn du die
 Browserdaten löschst, sind sie weg; die Originaldateien hast du weiterhin.
 
-Aus dem Internet lädt die App Karten- und Höhenkacheln, Orte (Wikidata, OpenStreetMap), Gewässer und
-Strassen für die Reliefkarte (OpenStreetMap) und Temperaturen für die Wolkenbasis (Open-Meteo). Übermittelt
-wird dabei der Kartenausschnitt oder der Startort, nie der Track.
+Aus dem Internet lädt die App Karten- und Höhenkacheln (darunter Thermik-Hotspots und Skyways von
+thermal.kk7.ch), Orte (Wikidata, OpenStreetMap), Gewässer und Strassen für die Reliefkarte (OpenStreetMap)
+und Temperaturen für die Wolkenbasis (Open-Meteo). Übermittelt wird dabei der Kartenausschnitt oder der
+Startort, nie der Track.
 
 Die Online-Version nutzt Google Analytics nur, wenn du im Banner zustimmst. Ändern lässt sich das über
 „Statistik-Einstellungen“ in der Fusszeile.
 
 ## Quellen
 
-Gelände: Terrain Tiles (AWS). Karten: Esri, Sentinel-2 cloudless (EOX), OpenTopoMap, © OpenStreetMap.
-Orte: Wikidata. Wetter: Open-Meteo. XC-Wertung: igc-xc-score.
+Gelände: Terrain Tiles (AWS). Karten: Esri, Sentinel-2 cloudless (EOX), OpenTopoMap, © OpenStreetMap,
+thermal.kk7.ch (M. von Känel, CC BY-NC-SA 4.0). Orte: Wikidata. Wetter: Open-Meteo. XC-Wertung: igc-xc-score.
 
 Weitere Ideen und Prioritäten stehen in [docs/ROADMAP.md](docs/ROADMAP.md), die UI-Prüfung in
 [docs/UI-UX-Review.md](docs/UI-UX-Review.md), die Gestaltungsregeln in [DESIGN.md](DESIGN.md).

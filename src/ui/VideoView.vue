@@ -13,7 +13,7 @@ import { FlightScene } from '../three/scene';
 import GliderPreview from './GliderPreview.vue';
 import { decodeAudioFile, renderSoundtrack, SoundPlayer, type MusicStyle } from '../three/audio';
 import { GLIDER_PRESETS, gliderChoice, PATTERN_LABEL, resetDesign, type GliderPresetId } from '../three/gliderDesigns';
-import { loadTerrain, loadTexture, MAP_SOURCES, paddedBounds, type MapSourceId, type Terrain, type TerrainTexture } from '../three/terrain';
+import { loadTerrain, loadTexture, MAP_SOURCES, paddedBounds, type Kk7Overlay, type MapSourceId, type Terrain, type TerrainTexture } from '../three/terrain';
 import { track as trackEvent } from '../app/analytics';
 import { COMPANION_COLORS, companionOffset, type Companion } from '../three/companions';
 import { baseAt, loadCloudBase, M_PER_K_SPREAD, type CloudBaseSeries } from '../app/weather';
@@ -48,6 +48,8 @@ const opt = reactive({
   curtain: true,
   wind: true,
   contours: false,
+  kk7Thermals: false,
+  kk7Skyways: false,
   pois: true,
   particles: true,
   pilotStyle: 'glider' as 'glider' | 'firefly' | 'both',
@@ -282,19 +284,31 @@ async function loadPoisFor() {
   }
 }
 
-/** Loaded map textures per source, so switching back is instant */
-const textures = new Map<MapSourceId, TerrainTexture>();
+/** Loaded map textures per source and kk7 overlay combination, so switching back is instant */
+const textures = new Map<string, TerrainTexture>();
 let textureToken = 0;
+
+function currentOverlays(): Kk7Overlay[] {
+  const out: Kk7Overlay[] = [];
+  if (opt.kk7Skyways) out.push('skyways');
+  if (opt.kk7Thermals) out.push('thermals');
+  return out;
+}
+function texKey() {
+  return `${opt.texture}:${currentOverlays().join(',')}`;
+}
 
 async function applyTexture() {
   if (!terrain.value) return;
   const source = opt.texture;
+  const overlays = currentOverlays();
+  const key = texKey();
   const token = ++textureToken;
-  if (source !== 'relief' && !textures.has(source)) {
+  if (source !== 'relief' && !textures.has(key)) {
     const label = `${t('Lade Karte')}: ${t(MAP_SOURCES[source].label)}`;
     progress.value = { label, done: 0, total: 1 };
     try {
-      textures.set(source, await loadTexture(terrain.value, source, { onProgress: (done, total) => (progress.value = { label, done, total }) }));
+      textures.set(key, await loadTexture(terrain.value, source, { overlays, onProgress: (done, total) => (progress.value = { label, done, total }) }));
     } finally {
       if (token === textureToken) progress.value = null;
     }
@@ -308,7 +322,7 @@ function rebuildScene() {
   if (!model) return;
   scene?.dispose();
   scene = new FlightScene(model, {
-    texture: opt.texture === 'relief' ? null : (textures.get(opt.texture) ?? null),
+    texture: opt.texture === 'relief' ? null : (textures.get(texKey()) ?? null),
     exaggeration: opt.exaggeration,
     gliderSize: opt.gliderSize,
     bankScale: opt.bankScale,
@@ -494,7 +508,7 @@ const timeLabel = computed(() => {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} / ${Math.floor(opt.durationS / 60)}:${String(opt.durationS % 60).padStart(2, '0')}`;
 });
 
-watch(() => opt.texture, applyTexture);
+watch(() => [opt.texture, opt.kk7Thermals, opt.kk7Skyways], applyTexture);
 const design = computed(() => gliderChoice.designs[gliderChoice.preset]);
 // colour pickers fire continuously while dragging: rebuild at most every 150 ms
 let gliderTimer = 0;
@@ -611,6 +625,8 @@ onUnmounted(() => {
             <small class="muted">{{ t('Nur die Darstellung des Schirms; die Datenleiste zeigt weiter die gemessene Querlage.') }}</small>
           </label>
           <label v-if="opt.texture !== 'relief'" class="check"><input v-model="opt.contours" type="checkbox" /> {{ t('Höhenlinien') }}</label>
+          <label v-if="opt.texture !== 'relief'" class="check" :title="t('Wo Thermik häufig ausgelöst wird, aus Hunderttausenden Flügen (thermal.kk7.ch)')"><input v-model="opt.kk7Thermals" type="checkbox" :disabled="exporting" /> {{ t('Thermik-Hotspots') }} (kk7.ch)</label>
+          <label v-if="opt.texture !== 'relief'" class="check" :title="t('Wo Piloten häufig im Geradeausflug unterwegs sind (thermal.kk7.ch)')"><input v-model="opt.kk7Skyways" type="checkbox" :disabled="exporting" /> {{ t('Skyways') }} (kk7.ch)</label>
         </fieldset>
         <fieldset>
           <legend>{{ t('Schirm') }}</legend>
@@ -757,7 +773,7 @@ onUnmounted(() => {
           {{ exporting ? t('Video wird erstellt …') : `${t(videoUrl ? 'Video neu erstellen' : 'Video erstellen')} (${exportSize.w}×${exportSize.h})` }}
         </button>
         <p v-if="!encodeOk" class="error">{{ t('Dieser Browser kann keine Videos erzeugen (WebCodecs fehlt). Chrome, Edge oder Safari ab 17 können es.') }}</p>
-        <p class="muted small">{{ t('Das Video wird Bild für Bild im Browser gerendert, nichts verlässt deinen Rechner.') }} {{ t('Gelände') }}: Terrain Tiles (AWS)<template v-if="opt.texture !== 'relief'">, {{ t('Karte') }}: {{ MAP_SOURCES[opt.texture].attribution }}</template>.</p>
+        <p class="muted small">{{ t('Das Video wird Bild für Bild im Browser gerendert, nichts verlässt deinen Rechner.') }} {{ t('Gelände') }}: Terrain Tiles (AWS)<template v-if="opt.texture !== 'relief'">, {{ t('Karte') }}: {{ MAP_SOURCES[opt.texture].attribution }}<template v-if="opt.kk7Thermals || opt.kk7Skyways">, thermal.kk7.ch (CC BY-NC-SA 4.0)</template></template>.</p>
       </aside>
     </div>
   </div>

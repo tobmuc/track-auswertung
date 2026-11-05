@@ -2,7 +2,7 @@
 import * as maplibregl from 'maplibre-gl';
 import type { GeoJSONSource, MapLayerMouseEvent, StyleSpecification } from 'maplibre-gl';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
-import { onMounted, onUnmounted, ref, watch } from 'vue';
+import { onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { colorBucket, type ColorMode } from '../app/colors';
 import type { ActivityResult } from '../app/types';
 import type { XcScore } from '../core';
@@ -49,6 +49,8 @@ const BASEMAPS = {
     maxzoom: 19,
   },
 } as const;
+/** kk7 asks every request to name the site; its check wants a domain with a dot */
+const KK7_SRC = encodeURIComponent(location.hostname.includes('.') ? location.hostname : 'track-auswertung.localhost');
 type Basemap = keyof typeof BASEMAPS | 'relief';
 /** layers of the relief map: colours and hillshade from the elevation tiles, OSM lines on top */
 const RELIEF_LAYERS = ['relief-color', 'relief-shade', 'osm-water', 'osm-river', 'osm-road', 'osm-border'];
@@ -57,6 +59,8 @@ const el = ref<HTMLDivElement>();
 const basemap = ref<Basemap>('satellite');
 const terrain = ref(false);
 const labels = ref(false);
+/** kk7 thermal maps (thermal.kk7.ch, M. von Känel, CC BY-NC-SA 4.0): hotspot probability and skyways */
+const kk7 = reactive({ thermals: false, skyways: false });
 let map: maplibregl.Map | null = null;
 let marker: maplibregl.Marker | null = null;
 let loaded = false;
@@ -68,6 +72,8 @@ function applyVisibility() {
   for (const id of RELIEF_LAYERS) map.setLayoutProperty(id, 'visibility', basemap.value === 'relief' ? 'visible' : 'none');
   if (basemap.value === 'relief') void loadOsm();
   map.setLayoutProperty('labels', 'visibility', labels.value ? 'visible' : 'none');
+  map.setLayoutProperty('kk7-thermals', 'visibility', kk7.thermals ? 'visible' : 'none');
+  map.setLayoutProperty('kk7-skyways', 'visibility', kk7.skyways ? 'visible' : 'none');
 }
 
 function style(): StyleSpecification {
@@ -93,6 +99,13 @@ function style(): StyleSpecification {
   };
   // own source for the relief: MapLibre advises against sharing one DEM source between terrain and hillshade
   sources.demRelief = { ...sources.dem, attribution: 'Terrain Tiles (Mapzen/AWS)' };
+  for (const [id, max] of [['thermals', 12], ['skyways', 13]] as const) {
+    sources[`kk7-${id}`] = {
+      type: 'raster', scheme: 'tms', tileSize: 256, maxzoom: max,
+      tiles: [`https://thermal.kk7.ch/tiles/${id}_all_all/{z}/{x}/{y}.png?src=${KK7_SRC}`],
+      attribution: '<a href="https://thermal.kk7.ch" target="_blank">thermal.kk7.ch</a> <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA</a>',
+    };
+  }
   sources.osm = { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, attribution: '© OpenStreetMap' };
   const rv = basemap.value === 'relief' ? ('visible' as const) : ('none' as const);
   return {
@@ -121,6 +134,10 @@ function style(): StyleSpecification {
         paint: { 'line-color': ['case', ['<=', ['get', 'rank'], 1], 'rgba(255,236,170,.95)', 'rgba(255,255,255,.85)'], 'line-width': ['-', 2.6, ['*', 0.45, ['get', 'rank']]] } },
       { id: 'osm-border', type: 'line' as const, source: 'osm', filter: ['==', ['get', 'kind'], 'border'], layout: { visibility: rv },
         paint: { 'line-color': 'rgba(255,255,255,.9)', 'line-width': ['case', ['==', ['get', 'rank'], 0], 2.2, 1.4], 'line-dasharray': [4, 3] } },
+      { id: 'kk7-skyways', type: 'raster' as const, source: 'kk7-skyways', layout: { visibility: kk7.skyways ? ('visible' as const) : ('none' as const) },
+        paint: { 'raster-opacity': 0.8 } },
+      { id: 'kk7-thermals', type: 'raster' as const, source: 'kk7-thermals', layout: { visibility: kk7.thermals ? ('visible' as const) : ('none' as const) },
+        paint: { 'raster-opacity': 0.75 } },
       { id: 'labels', type: 'raster' as const, source: 'labels', layout: { visibility: labels.value ? ('visible' as const) : ('none' as const) } },
     ],
   };
@@ -308,7 +325,7 @@ watch(() => props.hoverIdx, (i) => {
   if (i == null) marker.remove();
   else marker.setLngLat([props.result.timeline.lon[i], props.result.timeline.lat[i]]).addTo(map);
 });
-watch([basemap, labels], applyVisibility);
+watch([basemap, labels, () => kk7.thermals, () => kk7.skyways], applyVisibility);
 watch(terrain, applyTerrain);
 function applyTerrain(on: boolean) {
   if (!map || !loaded) return;
@@ -321,10 +338,12 @@ function applyTerrain(on: boolean) {
   <div class="wrap">
     <div ref="el" class="map" />
     <div class="controls">
-      <button v-for="(b, k) in BASEMAPS" :key="k" :class="{ active: basemap === k }" @click="basemap = k">{{ t(b.label) }}</button>
-      <button :class="{ active: basemap === 'relief' }" @click="basemap = 'relief'">{{ t('Relief') }}</button>
-      <button :class="{ active: labels }" @click="labels = !labels">{{ t('Beschriftung') }}</button>
-      <button :class="{ active: terrain }" @click="terrain = !terrain">{{ t('3D-Gelände') }}</button>
+      <button v-for="(b, k) in BASEMAPS" :key="k" :class="{ active: basemap === k }" :aria-pressed="basemap === k" @click="basemap = k">{{ t(b.label) }}</button>
+      <button :class="{ active: basemap === 'relief' }" :aria-pressed="basemap === 'relief'" @click="basemap = 'relief'">{{ t('Relief') }}</button>
+      <button :class="{ active: labels }" :aria-pressed="labels" @click="labels = !labels">{{ t('Beschriftung') }}</button>
+      <button :class="{ active: terrain }" :aria-pressed="terrain" @click="terrain = !terrain">{{ t('3D-Gelände') }}</button>
+      <button :class="{ active: kk7.thermals }" :aria-pressed="kk7.thermals" :title="t('Wo Thermik häufig ausgelöst wird, aus Hunderttausenden Flügen (thermal.kk7.ch)')" @click="kk7.thermals = !kk7.thermals">{{ t('Thermik-Hotspots') }}</button>
+      <button :class="{ active: kk7.skyways }" :aria-pressed="kk7.skyways" :title="t('Wo Piloten häufig im Geradeausflug unterwegs sind (thermal.kk7.ch)')" @click="kk7.skyways = !kk7.skyways">{{ t('Skyways') }}</button>
     </div>
   </div>
 </template>
