@@ -106,9 +106,9 @@ const ease = (x: number) => {
 /**
  * Soft glowing column: brighter where the surface faces the camera, fading towards the silhouette,
  * the bottom and the top, so it reads as a volume of warm air rather than a hard tube.
- * uGrow (0..1) reveals it from the bottom up.
+ * uGrow (0..1) shows it from the bottom up to that share of its height.
  */
-function softColumnMaterial(color: THREE.Color, opacity: number, y0: number, y1: number, fadeTop = 0.35): THREE.ShaderMaterial {
+function softColumnMaterial(color: THREE.Color, opacity: number, y0: number, y1: number, fadeTop = 0.35, fadeBottom = 0.12): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     uniforms: {
       uColor: { value: color.clone() },
@@ -117,6 +117,7 @@ function softColumnMaterial(color: THREE.Color, opacity: number, y0: number, y1:
       uY1: { value: y1 },
       uGrow: { value: 1 },
       uFadeTop: { value: fadeTop },
+      uFadeBot: { value: fadeBottom },
     },
     // the renderer uses a logarithmic depth buffer: custom shaders need its chunks, or nothing shows
     vertexShader: `
@@ -137,7 +138,7 @@ function softColumnMaterial(color: THREE.Color, opacity: number, y0: number, y1:
       #include <common>
       #include <logdepthbuf_pars_fragment>
       uniform vec3 uColor;
-      uniform float uOpacity, uY0, uY1, uGrow, uFadeTop;
+      uniform float uOpacity, uY0, uY1, uGrow, uFadeTop, uFadeBot;
       varying float vY;
       varying vec3 vN;
       varying vec3 vV;
@@ -146,7 +147,7 @@ function softColumnMaterial(color: THREE.Color, opacity: number, y0: number, y1:
         float h = clamp((vY - uY0) / max(1.0, uY1 - uY0), 0.0, 1.0);
         float facing = abs(dot(normalize(vN), normalize(vV)));
         float a = uOpacity * pow(facing, 1.6);
-        a *= smoothstep(0.0, 0.12, h) * mix(1.0, uFadeTop, smoothstep(0.55, 1.0, h));
+        a *= (uFadeBot > 0.0 ? smoothstep(0.0, uFadeBot, h) : 1.0) * mix(1.0, uFadeTop, smoothstep(0.55, 1.0, h));
         a *= 1.0 - smoothstep(uGrow - 0.1, uGrow, h);
         if (a < 0.003) discard;
         gl_FragColor = vec4(uColor, a);
@@ -167,7 +168,6 @@ function fadeGroup(g: THREE.Object3D, a: number) {
       if (mat instanceof THREE.ShaderMaterial && mat.uniforms.uOpacity) {
         mat.userData.base ??= mat.uniforms.uOpacity.value;
         mat.uniforms.uOpacity.value = mat.userData.base * a;
-        if (mat.uniforms.uGrow) mat.uniforms.uGrow.value = 0.1 + 1.0 * a;
       } else {
         mat.userData.base ??= mat.opacity;
         mat.transparent = true;
@@ -469,7 +469,10 @@ export class FlightScene {
   private pilot: THREE.Group;
   private glider: THREE.Group;
   private dropLine: THREE.Line;
-  private thermalObjs: { group: THREE.Group; label: THREE.Sprite; start: number; top: number; rim: LineMaterial }[] = [];
+  private thermalObjs: {
+    group: THREE.Group; label: THREE.Sprite; start: number; end: number; top: number; rim: LineMaterial;
+    funnel: THREE.ShaderMaterial; y0: number; y1: number;
+  }[] = [];
   /** first video frame at which the timeline index is reached, per index (cached per plan) */
   private frameCache = { plan: null as Plan | null, map: new Map<number, number>() };
   /** wind arrow opacity, eased over video frames */
@@ -636,7 +639,8 @@ export class FlightScene {
           return { x: ax, y: alt * ex, z: az, r: r * 0.5 * (0.55 + 0.5 * (k / N)) };
         });
         // soft column of warm air instead of a hard tube
-        const funnel = new THREE.Mesh(funnelGeometry(rings), softColumnMaterial(color, 0.75, rings[0].y, rings[N].y, 0.6));
+        const funnelMat = softColumnMaterial(color, 0.75, rings[0].y, rings[N].y, 0.6);
+        const funnel = new THREE.Mesh(funnelGeometry(rings), funnelMat);
         funnel.renderOrder = 1;
         g.add(funnel);
         const top = rings[N];
@@ -696,19 +700,22 @@ export class FlightScene {
           );
           axisLine.computeLineDistances();
           g.add(disc, spot, axisLine);
-          // warm air rising from the trigger: a soft glow from the ground up to the lowest circle
+          // the thermal below the lowest circle: the same tube continued down to the trigger,
+          // narrow at the ground and widening upwards like the air bubble rising from it; faint at the
+          // ground and joining the funnel without a seam
           const gy = trg.h * ex;
           if (base.y - gy > r) {
+            const K = 8;
             const col = new THREE.Mesh(
-              funnelGeometry([
-                { x: trg.x, y: gy, z: trg.z, r: base.r * 1.6 },
-                { x: (trg.x + base.x) / 2, y: (gy + base.y) / 2, z: (trg.z + base.z) / 2, r: base.r * 1.3 },
-                { x: base.x, y: base.y, z: base.z, r: base.r },
-              ]),
-              softColumnMaterial(new THREE.Color('#ff9f43'), 0.5, gy, base.y, 1),
+              funnelGeometry(Array.from({ length: K + 1 }, (_, k) => {
+                const f = k / K;
+                return { x: trg.x + (base.x - trg.x) * f, y: gy + (base.y - gy) * f, z: trg.z + (base.z - trg.z) * f, r: base.r * (0.25 + 0.75 * f) };
+              })),
+              softColumnMaterial(color, 0.75, gy, base.y, 1, 0.85),
             );
             col.renderOrder = 1;
             g.add(col);
+            funnelMat.uniforms.uFadeBot.value = 0;
           }
           if (labelled.has(th.idx)) {
             const sl = slopeAt(T, trg.x, trg.z);
@@ -743,7 +750,7 @@ export class FlightScene {
         g.add(label);
         g.visible = false;
         this.scene.add(g);
-        this.thermalObjs.push({ group: g, label, start: th.start, top: th.topAlt, rim: rimMat });
+        this.thermalObjs.push({ group: g, label, start: th.start, end: th.end, top: th.topAlt, rim: rimMat, funnel: funnelMat, y0: rings[0].y, y1: rings[N].y });
       }
     }
 
@@ -955,10 +962,21 @@ export class FlightScene {
     }
 
     for (const th of this.thermalObjs) {
-      // grows from the bottom up and fades in once the pilot reaches the thermal
-      const a = all ? 1 : this.appear(th.start, fi, 1.4, video);
+      // fades in once the pilot reaches the thermal; the funnel fills up to the highest point
+      // the pilot has climbed to so far, so it builds up with the climb
+      const a = all ? 1 : this.appear(th.start, fi, 1.0, video);
       th.group.visible = a > 0.001;
-      if (th.group.visible) fadeGroup(th.group, a);
+      if (th.group.visible) {
+        fadeGroup(th.group, a);
+        let grow = 1;
+        if (!all && fi < th.end) {
+          let hi = -Infinity;
+          for (let k = th.start, e = Math.floor(fi); k <= e; k++) hi = Math.max(hi, m.alt[k] * ex);
+          hi = Math.max(hi, p.y);
+          grow = Math.min(1, Math.max(0, (hi - th.y0) / Math.max(1, th.y1 - th.y0))) + 0.06;
+        }
+        th.funnel.uniforms.uGrow.value = grow;
+      }
       const d = this.camera.position.distanceTo(th.label.position);
       const h = d * 0.045;
       th.label.scale.set(h * th.label.userData.aspect, h, 1);
