@@ -963,14 +963,15 @@ export class FlightScene {
     }
 
     for (const th of this.thermalObjs) {
-      // appears as the track flies into the thermal (first turn); the funnel glows up to the
-      // highest point the pilot has climbed to so far
-      const a = all ? 1 : this.appear(th.start, fi, 0.35, video);
+      // already stands, faint, while the glider approaches (3 s of video before the first turn);
+      // from the first turn on it glows up to the height the glider has climbed to, rising with it
+      const a = all ? 1 : this.appear(th.start, fi, 0.8, video, 3);
       th.group.visible = a > 0.001;
       if (th.group.visible) {
         fadeGroup(th.group, a);
         let grow = 1;
-        if (!all && fi < th.end) {
+        if (!all && fi < th.start) grow = 0;
+        else if (!all && fi < th.end) {
           let hi = -Infinity;
           for (let k = th.start, e = Math.floor(fi); k <= e; k++) hi = Math.max(hi, m.alt[k] * ex);
           hi = Math.max(hi, p.y);
@@ -1025,12 +1026,13 @@ export class FlightScene {
   }
 
   /**
-   * 0..1 fade-in for something that appears when the timeline reaches index idx, over `secs` of video.
+   * 0..1 fade-in for something that appears when the timeline reaches index idx, over `secs` of video,
+   * starting `leadS` seconds of video earlier.
    * Without video frames (single stills) it simply switches.
    */
-  private appear(idx: number, fi: number, secs: number, video?: { frameNo: number; plan: Plan }): number {
-    if (fi < idx) return 0;
-    if (!video) return 1;
+  private appear(idx: number, fi: number, secs: number, video?: { frameNo: number; plan: Plan }, leadS = 0): number {
+    if (!video) return fi >= idx ? 1 : 0;
+    if (fi < idx && leadS <= 0) return 0;
     const { plan, frameNo } = video;
     const c = this.frameCache;
     if (c.plan !== plan) {
@@ -1049,7 +1051,7 @@ export class FlightScene {
       f = lo;
       c.map.set(idx, f);
     }
-    return ease((frameNo - f) / (secs * plan.fps));
+    return ease((frameNo - f + leadS * plan.fps) / (secs * plan.fps));
   }
 
   /**
