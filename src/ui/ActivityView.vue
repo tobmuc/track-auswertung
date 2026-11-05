@@ -14,7 +14,7 @@ import GroundPanel from './GroundPanel.vue';
 import ProfileChart from './ProfileChart.vue';
 import TrackMap from './TrackMap.vue';
 import ThermalCircles from './ThermalCircles.vue';
-import { centring, type Centring } from '../core';
+import { ACCEL_DELTA_KMH, centring, meanOf, type Centring } from '../core';
 
 const props = defineProps<{ id: number }>();
 
@@ -133,6 +133,19 @@ const hikeGroups = computed<Group[]>(() => {
   ];
 });
 
+/** circle shape figures for the summary (same values as in "Thermik & Kreisformen") */
+const circleRows = computed<[string, string][]>(() => {
+  const cs = flight.value?.circles ?? [];
+  if (cs.length < 5) return [];
+  const done = centring(cs).filter((c) => c.centredAfterS != null).map((c) => c.centredAfterS!).sort((a, b) => a - b);
+  return [
+    [t('Ø Kreisdurchmesser'), F.m(meanOf(cs, (c) => 2 * c.radiusM))],
+    [t('Ø Querlage'), `${F.num(meanOf(cs, (c) => c.bankDeg))}°`],
+    [t('Ø Steigen im Kreis'), F.vario(meanOf(cs, (c) => c.climb))],
+    [t('Zentriert nach (Median)'), done.length ? `${F.num(done[done.length >> 1])} s` : '–'],
+  ];
+});
+
 const flightGroups = computed<Group[]>(() => {
   const f = flight.value;
   const s = res.value?.score;
@@ -185,8 +198,22 @@ const flightGroups = computed<Group[]>(() => {
       title: t('Kreisen'),
       rows: [[t('Kreise links / rechts'), `${f.circlesLeft} / ${f.circlesRight}`], [t('Kreisen links | rechts'), leftPct == null ? '–' : `${leftPct} % | ${100 - leftPct} %`],
         [t('Thermiken'), String(f.thermals.length)], [t('Ø Zeit pro Kreis'), f.avgTimePerCircleS ? `${F.num(f.avgTimePerCircleS)} s` : '–'], [t('Wind (aus Kreisen)'), wind],
-        [t('Max. Wind'), maxW ? `${compass(maxW.fromDeg)} ${F.num(maxW.speedKmh)} km/h` : '–']],
+        [t('Max. Wind'), maxW ? `${compass(maxW.fromDeg)} ${F.num(maxW.speedKmh)} km/h` : '–'],
+        ...circleRows.value],
     },
+    ...(f.airspeed
+      ? [{
+          title: t('Fahrt durch die Luft'),
+          rows: [
+            [t('Trimmfahrt (geschätzt)'), F.kmh(f.airspeed.trimKmh, 0)],
+            [t('Max. Fahrt (20 s)'), F.kmh(f.airspeed.max20sKmh, 0)],
+            [t('Beschleunigt'), `${F.dur(f.airspeed.acceleratedS)} (${F.pct(f.airspeed.acceleratedS, f.airspeed.evaluatedS)} ${t('des Geradeausflugs')})`],
+            [t('Beschleunigte Phasen'), `${f.airspeed.phases.length} · ${t('längste')} ${F.dur(Math.max(0, ...f.airspeed.phases.map((p) => p.durationS)))}`],
+            [t('Beschleunigt bei Gegenwind'), f.airspeed.accelShareHeadwind == null ? '–' : `${Math.round(f.airspeed.accelShareHeadwind * 100)} %`],
+            [t('Beschleunigt bei Rückenwind'), f.airspeed.accelShareTailwind == null ? '–' : `${Math.round(f.airspeed.accelShareTailwind * 100)} %`],
+          ] as [string, string][],
+        }]
+      : []),
   ];
 });
 
@@ -262,13 +289,14 @@ watch(() => props.id, load);
 
 <template>
   <div v-if="loading" class="state">{{ t('Analysiere Track … (XC-Optimierung kann einige Sekunden dauern)') }}</div>
-  <div v-else-if="error" class="state error">{{ error }}</div>
+  <div v-else-if="error" class="state error" role="alert">{{ error }}<br /><a class="btn back" href="#/">{{ t('Zur Startseite') }}</a></div>
   <article v-else-if="rec && res" class="activity">
     <header class="head">
       <div class="title">
-        <input class="title-input" :value="rec.title" @change="update({ title: ($event.target as HTMLInputElement).value })" />
+        <h1 class="sr-only">{{ rec.title }}</h1>
+        <input class="title-input" :aria-label="t('Titel der Aktivität')" :value="rec.title" @change="update({ title: ($event.target as HTMLInputElement).value })" />
         <div class="meta">
-          <select :value="rec.sport ?? ''" @change="update({ sport: (($event.target as HTMLSelectElement).value || undefined) as Sport | undefined })">
+          <select :aria-label="t('Sportart')" :value="rec.sport ?? ''" @change="update({ sport: (($event.target as HTMLSelectElement).value || undefined) as Sport | undefined })">
             <option value="">{{ t('Automatisch') }} ({{ t(F.SPORT_LABEL[res.sport]) }})</option>
             <option v-for="(l, k) in F.SPORT_LABEL" :key="k" :value="k">{{ t(l) }}</option>
           </select>
@@ -279,13 +307,13 @@ watch(() => props.id, load);
         </div>
       </div>
       <div class="actions">
-        <select v-if="res.flight" :value="rec.rules" :title="t('Wertungsregeln')" @change="update({ rules: ($event.target as HTMLSelectElement).value as RuleSet })">
+        <select v-if="res.flight" :value="rec.rules" :title="t('Wertungsregeln')" :aria-label="t('Wertungsregeln')" @change="update({ rules: ($event.target as HTMLSelectElement).value as RuleSet })">
           <option value="XContest">XContest</option>
           <option value="FAI">FAI</option>
           <option value="FFVL">FFVL</option>
           <option value="XCLeague">XCLeague</option>
         </select>
-        <a :href="`#/a/${id}/3d`"><button class="primary">{{ t('3D-Video') }}</button></a>
+        <a class="btn primary" :href="`#/a/${id}/3d`">🎬 {{ t('3D-Video') }}</a>
         <button @click="remove">{{ t('Löschen') }}</button>
       </div>
     </header>
@@ -386,7 +414,7 @@ watch(() => props.id, load);
       </h2>
       <div class="scroll">
         <table>
-          <thead><tr><th>{{ t('Zeit') }}</th><th>{{ t('Dauer') }}</th><th>{{ t('Distanz') }}</th><th>{{ t('Höhe') }}</th><th>{{ t('Gleitzahl') }}</th><th :title="t('ohne Windeinfluss (Wind aus den Kreisen)')">{{ t('GZ Luft') }}</th><th>{{ t('Ø Speed') }}</th><th>{{ t('Ø Sinken') }}</th></tr></thead>
+          <thead><tr><th>{{ t('Zeit') }}</th><th>{{ t('Dauer') }}</th><th>{{ t('Distanz') }}</th><th>{{ t('Höhe') }}</th><th>{{ t('Gleitzahl') }}</th><th :title="t('ohne Windeinfluss (Wind aus den Kreisen)')">{{ t('GZ Luft') }}</th><th>{{ t('Ø Speed') }}</th><th :title="t('Fahrt durch die Luft aus Winddreieck (Wind aus den Kreisen)')">{{ t('Fahrt Luft') }}</th><th :title="t('Wind entlang der Strecke: + Rückenwind, − Gegenwind')">{{ t('Wind ±') }}</th><th>{{ t('Ø Sinken') }}</th></tr></thead>
           <tbody>
             <tr v-for="g in glidesSorted" :key="g.start" @mouseenter="hoverIdx = (g.start + g.end) >> 1" @mouseleave="hoverIdx = null">
               <td>{{ F.clock(res.timeline.t[g.start], tz) }}</td>
@@ -396,6 +424,8 @@ watch(() => props.id, load);
               <td class="strong">{{ g.ratio != null ? F.glide(g.ratio) : t('Höhe gewonnen') }}</td>
               <td>{{ F.glide(g.airRatio) }}</td>
               <td>{{ F.kmh(g.avgSpeedKmh, 0) }}</td>
+              <td :class="{ accel: g.airKmh != null && flight?.airspeed && g.airKmh >= flight.airspeed.trimKmh + ACCEL_DELTA_KMH }">{{ g.airKmh != null ? F.kmh(g.airKmh, 0) : '–' }}</td>
+              <td>{{ g.windAlongKmh != null ? F.signed(g.windAlongKmh, 'km/h') : '–' }}</td>
               <td>{{ F.vario(g.avgVario) }}</td>
             </tr>
           </tbody>
@@ -405,6 +435,7 @@ watch(() => props.id, load);
 
     <section v-if="thermals.length" class="panel block">
       <h2>{{ t('Stärkste Thermiken') }}</h2>
+      <div class="scroll-x">
       <table>
         <thead><tr><th>{{ t('Zeit') }}</th><th>{{ t('Basis → Top') }}</th><th>{{ t('Gewinn') }}</th><th>{{ t('Ø Steigen') }}</th><th>{{ t('Dauer') }}</th><th>{{ t('Wind (Kreise)') }}</th><th :title="t('Wind aus dem Versatz der Kreismittelpunkte')">{{ t('Wind (Drift)') }}</th><th :title="t('Versatz des Thermikkerns vom untersten zum obersten Kreis')">{{ t('Versatz') }}</th><th :title="t('Ø Kreisdurchmesser relativ zur Luft und Querlage')">{{ t('Ø Kreis') }}</th><th :title="t('Zeit vom Einflug bis zum ersten Kreis mit 80 % des besten Steigens')">{{ t('Zentriert') }}</th></tr></thead>
         <tbody>
@@ -422,6 +453,7 @@ watch(() => props.id, load);
           </tr>
         </tbody>
       </table>
+      </div>
     </section>
 
     <ThermalCircles v-if="res.flight" :result="res" :title="rec?.title ?? ''" />
@@ -437,7 +469,9 @@ watch(() => props.id, load);
 .title-input:hover, .title-input:focus { border-color: var(--line); outline: none; }
 .meta { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 6px; font-size: 14px; }
 .actions { display: flex; gap: 8px; align-items: flex-start; }
-.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.scroll-x { overflow-x: auto; }
+.back { margin-top: 14px; }
 .kpi { padding: 14px 16px; }
 .kpi .value { font-size: 26px; font-weight: 700; margin-top: 4px; }
 .mapcard { overflow: hidden; }
@@ -467,9 +501,18 @@ th { text-align: left; font-weight: 500; color: var(--muted); font-size: 12px; p
 td { padding: 6px 8px; border-bottom: 1px solid var(--line); }
 tbody tr:hover { background: var(--panel-2); }
 td.strong { font-weight: 700; }
+td.accel { color: var(--accent); font-weight: 600; }
 .with-seg { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .with-seg .seg { margin-left: auto; font-weight: 400; }
 .scroll { max-height: 420px; overflow: auto; }
 .scroll thead th { position: sticky; top: 0; background: var(--panel); }
-@media (max-width: 800px) { .title-input { font-size: 22px; } table { font-size: 12px; } }
+@media (max-width: 800px) {
+  .title-input { font-size: 20px; width: 100%; }
+  table { font-size: 12px; }
+  .kpis { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .kpi { padding: 10px 12px; }
+  .kpi .value { font-size: 20px; }
+  .block { padding: 14px; }
+  .scroll { overflow-x: auto; }
+}
 </style>

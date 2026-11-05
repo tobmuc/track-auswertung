@@ -65,6 +65,12 @@ Am besten in Chrome oder Edge (für den Video-Export, Safari ab Version 17 geht 
   pro Thermik und im Schnitt
 - Jedes Diagramm als PNG speichern, zum Teilen oder für die Trainerbesprechung
 
+**Fahrt durch die Luft**
+- Fahrt gegenüber der Luft aus dem Winddreieck (Grundgeschwindigkeit minus Wind aus den Kreisen)
+- Geschätzte Trimmfahrt, höchste Fahrt, Zeit und Phasen im **beschleunigten Flug**
+- Beschleunigt bei Gegen- und Rückenwind – zeigt, ob du nach Sollfahrt fliegst
+- Gleitstrecken mit Fahrt durch die Luft und Wind entlang der Strecke
+
 **Karte**
 - Satellit, Sentinel-2, Topo, Strasse und **Relief** (Höhenfarben mit Schummerung, Seen, Flüsse,
   Strassen und Grenzen – ähnlich der XContest-Reliefkarte, aber aus offenen Daten)
@@ -138,6 +144,8 @@ Orte: Wikidata · Wetter: Open-Meteo · XC-Wertung: igc-xc-score
 
 ---
 
+Weitere Ideen und Prioritäten: [docs/ROADMAP.md](docs/ROADMAP.md) · UI-Prüfung: [docs/UI-UX-Review.md](docs/UI-UX-Review.md)
+
 ## Für Entwickler
 
 ### Lokal starten
@@ -172,7 +180,7 @@ Er ist vorbereitet, aber noch nicht im Repo: Workflow-Dateien lassen sich nur mi
 `workflow` hochladen (`gh auth refresh -h github.com -s workflow`). Danach die Datei committen und unter
 *Settings → Pages* die Quelle auf „GitHub Actions“ stellen.
 
-Welche Version online ist, steht unten in der Seitenleiste: `v0.2.0 · Build 57 · af7d4c1 · 04.11.2026`
+Welche Version online ist, steht unten in der Seitenleiste: `v0.3.0 · Build 14 · 1a2b3c4 · 05.11.2026`
 (Version aus `package.json`, Build = Anzahl Commits, Commit-Kürzel, Build-Datum; ein `+` hinter dem Commit heisst:
 mit nicht committeten Änderungen gebaut). Ein Klick öffnet den Commit auf GitHub.
 

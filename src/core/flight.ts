@@ -1,4 +1,5 @@
 import { angleDiff, bearingDeg, distM, localXY } from './geo';
+import { airspeedStats } from './airspeed';
 import { gainLoss, windowRate } from './series';
 import type { CircleStat, Circling, CorePoint, FlightMode, FlightStats, Glide, Range, Series, Thermal, TrackPoint, Wind } from './types';
 
@@ -289,6 +290,26 @@ export function analyzeFlight(pts: TrackPoint[], r: Range, s: Series): FlightSta
       gs = -1;
     }
   }
+  // airspeed from the wind triangle, per glide and accelerated phases
+  const air = airspeedStats(pts, r.start, s, glides, (i) => windNear(circleWinds, i));
+  if (air) {
+    for (const g of glides) {
+      let sa = 0, sw = 0, c = 0;
+      const w = windNear(circleWinds, (g.start + g.end) >> 1);
+      for (let i = g.start; i <= g.end; i++) if (air.air[i] === air.air[i]) { sa += air.air[i]; c++; }
+      if (c && w) {
+        // wind along the straight line of the glide
+        const p = pts[r.start + g.start];
+        const q = pts[r.start + g.end];
+        const [dx, dy] = localXY(q.lat, q.lon, p.lat, p.lon);
+        const d = Math.hypot(dx, dy);
+        if (d > 0) sw = ((w.vx * dx + w.vy * dy) / d) * 3.6;
+        g.airKmh = sa / c;
+        g.windAlongKmh = sw;
+      }
+    }
+  }
+
   let bestGlide: number | null = null;
   {
     let j = 0;
@@ -352,6 +373,7 @@ export function analyzeFlight(pts: TrackPoint[], r: Range, s: Series): FlightSta
     circles: circles.map(({ i: _, ...c }) => c),
     thermals,
     glides,
+    airspeed: air ? (({ air: _, ...rest }) => rest)(air) : null,
     winds,
     wind,
     modeShare: modeTime,

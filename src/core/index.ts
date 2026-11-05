@@ -4,3 +4,4 @@ export * from './analyze';
 export * from './score';
 export { compass } from './geo';
 export * from './circles';
+export * from './airspeed';

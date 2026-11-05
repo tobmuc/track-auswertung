@@ -567,7 +567,7 @@ onUnmounted(() => {
             <button class="primary" :disabled="exporting || !encodeOk" @click="startExport">{{ t('Video neu erstellen') }}</button>
           </p>
           <video :src="videoUrl" controls playsinline />
-          <a class="download" :href="videoUrl" :download="fileName"><button :class="outdated ? '' : 'primary'">{{ t('MP4 speichern') }}{{ outdated ? ` (${t('alter Stand')})` : '' }}</button></a>
+          <a class="download btn" :class="{ primary: !outdated }" :href="videoUrl" :download="fileName">{{ t('MP4 speichern') }}{{ outdated ? ` (${t('alter Stand')})` : '' }}</a>
         </div>
       </section>
 

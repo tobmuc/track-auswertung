@@ -194,7 +194,7 @@ onUnmounted(() => ro?.disconnect());
 
 <template>
   <div ref="box" class="profile" @mousemove="onMove" @mouseleave="onLeave">
-    <canvas ref="canvas" />
+    <canvas ref="canvas" role="img" :aria-label="t('Höhenprofil')" />
     <div v-if="tip" class="tip" :style="{ left: `${tip.x}px` }">
       <span v-for="t in tip.text" :key="t">{{ t }}</span>
     </div>

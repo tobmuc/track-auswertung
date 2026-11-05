@@ -1,3 +1,4 @@
+import type { AirspeedStats } from './airspeed';
 export type Sport = 'paragliding' | 'hikefly' | 'hanggliding' | 'hiking';
 
 /** One GPS fix. Times in ms since epoch (UTC), altitudes in m MSL. */
@@ -100,6 +101,10 @@ export interface Glide extends Range {
   avgSpeedKmh: number;
   /** average vertical speed m/s */
   avgVario: number;
+  /** mean airspeed (wind triangle), km/h, when wind is known */
+  airKmh?: number;
+  /** wind along the glide: + tailwind, − headwind, km/h */
+  windAlongKmh?: number;
 }
 
 export interface Wind {
@@ -165,6 +170,8 @@ export interface FlightStats {
   circles: CircleStat[];
   thermals: Thermal[];
   glides: Glide[];
+  /** airspeed and accelerated flight, null without enough straight flight with a wind estimate */
+  airspeed: Omit<AirspeedStats, 'air'> | null;
   winds: Wind[];
   wind: Wind | null;
   modeShare: Record<FlightMode, number>;

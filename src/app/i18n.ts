@@ -17,12 +17,14 @@ function load(): Lang {
 
 export const i18n = reactive({ lang: load() });
 watch(() => i18n.lang, (l) => {
+  // screen readers and hyphenation follow the page language
+  document.documentElement.lang = l;
   try {
     localStorage.setItem(STORE_KEY, l);
   } catch {
     /* private mode */
   }
-});
+}, { immediate: true });
 
 /** Locale for number and date formatting */
 export const locale = () => (i18n.lang === 'en' ? 'en-GB' : 'de-CH');
@@ -180,6 +182,25 @@ const EN: Record<string, string> = {
   "Wind aus dem Versatz der Kreismittelpunkte": "wind from the drift of the circle centres",
   "Versatz des Thermikkerns vom untersten zum obersten Kreis": "offset of the thermal core from the lowest to the highest circle",
   "Thermik & Kreisformen": "Thermals & circle shapes",
+  "Fahrt durch die Luft": "Airspeed",
+  "Trimmfahrt (geschätzt)": "Trim speed (estimated)",
+  "Max. Fahrt (20 s)": "Max. airspeed (20 s)",
+  "Beschleunigt": "Accelerated",
+  "des Geradeausflugs": "of straight flight",
+  "Beschleunigte Phasen": "Accelerated phases",
+  "längste": "longest",
+  "Beschleunigt bei Gegenwind": "Accelerated in headwind",
+  "Beschleunigt bei Rückenwind": "Accelerated in tailwind",
+  "Ø Kreisdurchmesser": "Avg circle diameter",
+  "Zentriert nach (Median)": "Centred after (median)",
+  "Fahrt durch die Luft aus Winddreieck (Wind aus den Kreisen)": "Speed through the air from the wind triangle (wind from the circles)",
+  "Fahrt Luft": "Airspeed",
+  "Wind entlang der Strecke: + Rückenwind, − Gegenwind": "Wind along the glide: + tailwind, − headwind",
+  "Wind ±": "Wind ±",
+  "Zur Startseite": "Back to start",
+  "Titel der Aktivität": "Activity title",
+  "Sportart": "Sport",
+  "Höhenprofil": "Altitude profile",
   "Verteilung der Steigwerte": "Climb rate distribution",
   "Zeit beim Kreisen je Steigwert, pro Vollkreis gemessen": "Time circling per climb rate, measured per full circle",
   "Kreisdurchmesser und Steigen": "Circle diameter and climb",

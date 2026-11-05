@@ -324,10 +324,10 @@ function savePng(id: ChartId) {
       <figure v-for="c in charts" :key="c.id" :class="['chart', c.id]">
         <figcaption>
           <strong>{{ t(c.title) }}</strong>
-          <button class="png" :title="t('Diagramm als PNG speichern')" @click="savePng(c.id)">PNG</button>
+          <button class="png" :title="t('Diagramm als PNG speichern')" :aria-label="`${t('Diagramm als PNG speichern')}: ${t(c.title)}`" @click="savePng(c.id)">⤓ PNG</button>
         </figcaption>
         <div :ref="(el) => { if (el) boxes[c.id] = el as HTMLDivElement }" class="cbox">
-          <canvas :ref="(el) => { if (el) canvases[c.id] = el as HTMLCanvasElement }" />
+          <canvas role="img" :aria-label="`${t(c.title)}: ${t(c.hint)}`" :ref="(el) => { if (el) canvases[c.id] = el as HTMLCanvasElement }" />
         </div>
         <p class="muted hint">{{ t(c.hint) }}</p>
       </figure>

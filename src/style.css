@@ -3,6 +3,8 @@
   --panel: #151b23;
   --panel-2: #1c2430;
   --line: #2a3441;
+  /* borders of form controls: ≥ 3:1 against the panels (WCAG 1.4.11) */
+  --control-line: #5d6b7c;
   --text: #e6edf3;
   --muted: #8b98a8;
   --accent: #ff8a3d;
@@ -17,16 +19,29 @@
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); }
 button, select, input { font: inherit; color: inherit; }
-button {
-  background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;
-  padding: 6px 12px; cursor: pointer;
+button, .btn {
+  background: var(--panel-2); border: 1px solid var(--control-line); border-radius: 8px;
+  padding: 6px 12px; cursor: pointer; color: var(--text); font: inherit; line-height: 1.3;
 }
-button:hover { border-color: var(--muted); }
-button.primary { background: var(--accent); border-color: var(--accent); color: #1a0d03; font-weight: 600; }
+.btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+button:hover, .btn:hover { border-color: var(--text); }
+button:disabled { opacity: .55; cursor: not-allowed; }
+button.primary, .btn.primary { background: var(--accent); border-color: var(--accent); color: #1a0d03; font-weight: 600; }
+button.primary:hover, .btn.primary:hover { filter: brightness(1.08); }
 button.active { background: var(--accent); border-color: var(--accent); color: #1a0d03; }
 select, input[type=text] {
-  background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px;
+  background: var(--panel-2); border: 1px solid var(--control-line); border-radius: 8px; padding: 6px 10px;
 }
+/* visible keyboard focus everywhere (WCAG 2.4.7), not on mouse clicks */
+:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+a { color: var(--accent-2); }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+/* finger-sized controls on touch screens (WCAG 2.5.8 / 44 px recommendation) */
+@media (pointer: coarse) {
+  button, .btn, select, input[type=text] { min-height: 44px; }
+  input[type=checkbox] { width: 20px; height: 20px; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
 .muted { color: var(--muted); }
 .label { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }

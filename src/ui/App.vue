@@ -18,6 +18,9 @@ const dragging = ref(false);
 const importing = ref(false);
 const error = ref('');
 const fileInput = ref<HTMLInputElement>();
+/** activity list: always open on large screens; on phones closed while an activity is shown */
+const listOpen = ref(true);
+const phone = () => window.matchMedia('(max-width: 800px)').matches;
 const BUILD = __BUILD__;
 const buildDate = new Intl.DateTimeFormat('de-CH', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(BUILD.date));
 const buildTitle = `Version ${BUILD.version}, Build ${BUILD.build}, Commit ${BUILD.commit}, ${new Date(BUILD.date).toLocaleString()}`;
@@ -31,6 +34,8 @@ function readRoute() {
   const m = /^#\/a\/(\d+)(\/3d)?/.exec(location.hash);
   currentId.value = m ? Number(m[1]) : null;
   view.value = m?.[2] ? '3d' : 'stats';
+  listOpen.value = !phone() || currentId.value == null;
+  if (currentId.value != null && phone()) window.scrollTo(0, 0);
 }
 onMounted(() => {
   readRoute();
@@ -104,8 +109,10 @@ function onPick(e: Event) {
         {{ importing ? t('Analysiere …') : t('+ Neue Aktivität') }}
       </button>
       <input ref="fileInput" type="file" accept=".igc,.gpx" multiple hidden @change="onPick" />
-      <div class="label list-label">{{ t('Aktivitäten') }}</div>
-      <nav class="list">
+      <button class="label list-label" :aria-expanded="listOpen" @click="listOpen = !listOpen">
+        {{ t('Aktivitäten') }} <span class="count">{{ activities.length }}</span> <span class="chev" aria-hidden="true">▾</span>
+      </button>
+      <nav class="list" :class="{ closed: !listOpen }" :aria-label="t('Aktivitäten')">
         <a
           v-for="a in activities"
           :key="a.id"
@@ -121,7 +128,7 @@ function onPick(e: Event) {
         </a>
         <p v-if="!activities.length" class="muted empty">{{ t('Noch keine Aktivitäten.') }}</p>
       </nav>
-      <p class="muted foot">{{ t('Alle Daten bleiben lokal im Browser (IndexedDB).') }}
+      <p class="muted foot" :class="{ closed: !listOpen }">{{ t('Alle Daten bleiben lokal im Browser (IndexedDB).') }}
         <template v-if="analyticsAvailable"><br /><button class="link" @click="resetConsent">{{ t('Statistik-Einstellungen') }}</button></template>
         <br /><a class="version" :title="buildTitle" :href="`https://github.com/tobmuc/track-auswertung/commit/${BUILD.commit.replace('+', '')}`" target="_blank" rel="noopener">v{{ BUILD.version }} · Build {{ BUILD.build }} · {{ BUILD.commit }} · {{ buildDate }}</a>
       </p>
@@ -151,7 +158,7 @@ function onPick(e: Event) {
             <figcaption><span class="live" /> {{ t('Beispiel: 81 km XC-Flug, 4 h 17 min im 30-Sekunden-Video') }}</figcaption>
           </figure>
         </div>
-        <div class="drop panel" :class="{ over: dragging }" @click="fileInput?.click()">
+        <div class="drop panel" :class="{ over: dragging }" role="button" tabindex="0" :aria-label="t('Track laden')" @click="fileInput?.click()" @keydown.enter.prevent="fileInput?.click()" @keydown.space.prevent="fileInput?.click()">
           <div class="drop-icon">⬆</div>
           <h2>{{ t('Track laden') }}</h2>
           <p>{{ t('IGC aus dem Vario oder GPX von Uhr/Handy hierher ziehen oder klicken.') }}</p>
@@ -178,7 +185,9 @@ function onPick(e: Event) {
 }
 .logo { font-weight: 800; font-size: 20px; color: var(--text); text-decoration: none; }
 .logo span { color: var(--accent); }
-.list-label { margin-top: 12px; }
+.list-label { margin-top: 12px; display: flex; align-items: center; gap: 6px; background: none; border: none; padding: 4px 0; cursor: default; min-height: 0; text-align: left; }
+.list-label .count { background: var(--panel-2); border-radius: 999px; padding: 0 7px; letter-spacing: 0; }
+.list-label .chev { display: none; margin-left: auto; }
 .list { display: flex; flex-direction: column; gap: 4px; overflow: auto; flex: 1; }
 .list a { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: 8px; color: var(--text); text-decoration: none; font-size: 14px; }
 .list a span { font-size: 12px; }
@@ -219,7 +228,12 @@ main { min-width: 0; padding: 24px; }
 }
 @media (max-width: 800px) {
   .layout { grid-template-columns: 1fr; }
-  .sidebar { position: static; height: auto; }
+  .sidebar { position: static; height: auto; gap: 8px; padding: 12px 16px; }
+  .list-label { cursor: pointer; width: 100%; }
+  .list-label .chev { display: inline; transition: transform .15s; }
+  .list-label[aria-expanded="false"] .chev { transform: rotate(-90deg); }
+  .list.closed, .foot.closed { display: none; }
+  .list { max-height: 40vh; }
   main { padding: 16px; }
 }
 .consent {
@@ -233,5 +247,5 @@ main { min-width: 0; padding: 24px; }
 button.link {background: none; border: none; padding: 0; color: var(--muted); text-decoration: underline; cursor: pointer; font-size: 12px; }
 .brand { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .lang { display: flex; gap: 2px; }
-.lang button { padding: 2px 7px; font-size: 11px; }
+.lang button { padding: 2px 7px; font-size: 11px; min-width: 32px; }
 </style>
