@@ -1,5 +1,6 @@
 import { angleDiff, bearingDeg, distM, localXY } from './geo';
 import { airspeedStats } from './airspeed';
+import { reviewFlight } from './review';
 import { gainLoss, windowRate } from './series';
 import type { CircleStat, Circling, CorePoint, FlightMode, FlightStats, Glide, Range, Series, Thermal, TrackPoint, Wind } from './types';
 
@@ -338,7 +339,11 @@ export function analyzeFlight(pts: TrackPoint[], r: Range, s: Series): FlightSta
   const launchAlt = s.alt[0];
   const maxAlt = Math.max(...altRaw);
 
+  const avgClimbInThermals = thermalS > 0 ? thermalGain / thermalS : null;
+  const review = reviewFlight({ pts, off: r.start, s, thermals, circles, glides, airspeed: air, avgClimbInThermals });
+
   return {
+    review,
     launchIdx: r.start,
     landingIdx: r.end,
     launchTime: p0.t,
@@ -359,7 +364,7 @@ export function analyzeFlight(pts: TrackPoint[], r: Range, s: Series): FlightSta
     bestGlide60s: bestGlide,
     bestClimb30s,
     worstSink30s,
-    avgClimbInThermals: thermalS > 0 ? thermalGain / thermalS : null,
+    avgClimbInThermals,
     timeCirclingS: circlingS,
     timeClimbingInThermalsS: thermalS,
     timeNotCirclingS: airtimeS - circlingS,

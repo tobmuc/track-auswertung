@@ -149,7 +149,7 @@ function facts(a: ActivityRecord) {
           <video :src="demoVideo" :poster="demoPoster" autoplay muted loop playsinline preload="auto" aria-hidden="true" />
           <div class="stage-text">
             <h1>{{ t('Dein Flug, wie er war.') }}</h1>
-            <p>{{ t('Zieh deinen Track hierher und sieh deine Thermiken, deine Gleitstrecken und deine Kreise im Gelände, in dem du geflogen bist. Mit einem Klick wird daraus ein 3D-Video für Instagram und YouTube.') }}</p>
+            <p>{{ t('Zieh deinen Track hierher. Du siehst den Flug in dem Gelände, über dem du geflogen bist, mit jeder Thermik und jeder Gleitstrecke. Aus demselben Track entsteht ein 3D-Video für Instagram oder YouTube.') }}</p>
             <p class="stage-note">{{ t('Im Video: 81 km Strecke, 4 h 17 min Flug, in 30 Sekunden.') }}</p>
           </div>
         </div>
@@ -180,7 +180,7 @@ function facts(a: ActivityRecord) {
           <dl class="what">
             <div><dt>{{ t('Auswertung') }}</dt><dd>{{ t('XC-Wertung nach XContest, FAI, FFVL und XC League; Thermiken mit Steigen und Versatz, Gleitstrecken mit Gleitzahl, Kreisdurchmesser, Querlage und Zentrieren.') }}</dd></div>
             <div><dt>{{ t('Fahrt durch die Luft') }}</dt><dd>{{ t('Aus Grundgeschwindigkeit und Wind: Trimmfahrt, wann du beschleunigt hast und ob bei Gegenwind mehr als bei Rückenwind.') }}</dd></div>
-            <div><dt>{{ t('3D-Video') }}</dt><dd>{{ t('Hoch- oder Querformat, Sonnenstand mit Schatten, Wolkenbasis, mehrere Piloten, Musik ohne GEMA.') }}</dd></div>
+            <div><dt>{{ t('3D-Video') }}</dt><dd>{{ t('Hoch- oder Querformat. Sonnenstand mit Schatten, Wolkenbasis, weitere Piloten am selben Tag und Musik ohne GEMA lassen sich zuschalten.') }}</dd></div>
             <div><dt>{{ t('Privat') }}</dt><dd>{{ t('Deine Tracks bleiben in deinem Browser. Nichts wird hochgeladen.') }}</dd></div>
           </dl>
         </div>

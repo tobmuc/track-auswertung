@@ -220,7 +220,7 @@ export function drawHud(g: CanvasRenderingContext2D, W: number, H: number, m: Mo
             const weak = last.th.exitClimb < last.th.avgClimb * 0.5;
             msg = {
               head: tr('Thermik verlassen'),
-              body: `${tr('bei')} ${last.th.exitClimb >= 0 ? '+' : '−'}${num(Math.abs(last.th.exitClimb), 1)} m/s (Ø ${num(last.th.avgClimb, 1)})${weak ? ` – ${tr('Bart war schwach')}` : ''}`,
+              body: `${tr('bei')} ${last.th.exitClimb >= 0 ? '+' : '−'}${num(Math.abs(last.th.exitClimb), 1)} m/s (Ø ${num(last.th.avgClimb, 1)})${weak ? `, ${tr('Bart war schwach')}` : ''}`,
               color: weak ? '#9ccc65' : '#ffca28',
             };
           } else {

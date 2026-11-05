@@ -1,19 +1,20 @@
 # Track-Auswertung
 
-**Flüge auswerten und als 3D-Video teilen – direkt im Browser, ohne Anmeldung.**
+Eine Web-App, die Gleitschirmflüge auswertet und als 3D-Video ausgibt. Sie läuft im Browser und braucht
+keine Anmeldung.
 
-IGC-Datei vom Vario oder GPX von Uhr/Handy hineinziehen: Du bekommst Statistik, XC-Wertung, Karte und
-Höhenprofil, und mit einem Klick ein 3D-Flugvideo als MP4 für Instagram, YouTube & Co.
-Für Gleitschirm, Hike & Fly, Hängegleiter und Wandern.
+Du ziehst eine IGC-Datei vom Vario oder eine GPX-Datei von Uhr oder Handy hinein. Die App zeigt Karte,
+Höhenprofil, XC-Wertung und jede Thermik und Gleitstrecke. Daraus kann sie ein MP4-Video im Hoch- oder
+Querformat erzeugen. Gedacht ist sie für Gleitschirm, Hike & Fly und Drachen; Wanderungen gehen auch.
 
-👉 **Online nutzen: https://tobmuc.github.io/track-auswertung/**
+Online: https://tobmuc.github.io/track-auswertung/
 
-Deine Tracks bleiben auf deinem Gerät: Sie werden im Browser gespeichert und nirgendwohin hochgeladen.
+Die Tracks bleiben im Browser gespeichert und werden nicht hochgeladen.
 
 <p align="center">
-  <img src="docs/images/demo-flug.gif" width="100%" alt="Animiertes Demo: 81-km-XC-Flug als 3D-Video mit Thermiken, Wolken, Sonnen-Panel und Datenleiste">
+  <img src="docs/images/demo-flug.gif" width="100%" alt="Animiertes Demo: 81-km-Streckenflug als 3D-Video mit Thermiken, Wolken, Sonnenstand und Datenleiste">
 </p>
-<p align="center"><em>Demo: ein 81-km-Streckenflug (4 h 17 min) als 30-Sekunden-Video, hier im Zeitraffer</em></p>
+<p align="center"><em>Ein 81-km-Streckenflug (4 h 17 min) als 30-Sekunden-Video, hier im Zeitraffer</em></p>
 
 <p align="center">
   <img src="docs/images/portrait-thermik.webp" width="32%" alt="3D-Video im Hochformat: Thermikschlauch mit Auslöser am Boden, Wolke und Sonnenstand">
@@ -25,135 +26,137 @@ Deine Tracks bleiben auf deinem Gerät: Sie werden im Browser gespeichert und ni
 ![3D-Video im Querformat: Thermik mit Cumulus, Thermik-Auslöser, Gleitzahl und Datenleiste](docs/images/landscape-thermik-wolke.jpg)
 <p align="center"><em>Querformat 16:9 für YouTube</em></p>
 
----
-
 ## So geht's
 
-1. **Track laden** – IGC oder GPX auf die Seite ziehen oder auf „+ Neue Aktivität“ klicken.
-   Für Hike & Fly den Aufstieg (GPX) und den Flug (IGC) zusammen auswählen.
-2. **Auswertung ansehen** – Kennzahlen, Karte, Höhenprofil, Thermiken und Gleitstrecken.
-3. **3D-Video** klicken – Format, Länge, Karte, Schirm und Musik wählen, in der Vorschau abspielen.
-4. **Video erstellen** – das MP4 wird Bild für Bild in deinem Browser gerendert und kann gespeichert werden.
+1. Track laden: IGC oder GPX auf die Seite ziehen oder oben auf „Track laden“ klicken. Bei Hike & Fly
+   den Aufstieg (GPX) und den Flug (IGC) zusammen auswählen.
+2. Die Auswertung erscheint mit Karte, Kennzahlen, Flugbewertung, Höhenprofil, Thermiken und
+   Gleitstrecken.
+3. „3D-Video erstellen“ öffnet die Video-Ansicht. Dort wählst du Format, Länge, Karte, Schirm und Musik
+   und siehst eine Vorschau.
+4. „Video erstellen“ rendert das MP4 Bild für Bild im Browser. Danach lässt es sich speichern.
 
-Am besten in Chrome oder Edge (für den Video-Export, Safari ab Version 17 geht auch).
+Der Video-Export braucht Chrome, Edge oder Safari ab Version 17.
 
----
-
-## Auswertung (Dashboard)
+## Auswertung
 
 ![Dashboard mit Reliefkarte, XC-Wertung, Höhenprofil und Flugphasen](docs/images/dashboard-relief.jpg)
 
-**Kennzahlen**
-- XC-Distanz und Punkte nach XContest, FFVL, FAI oder XC League – freie Strecke, flaches Dreieck und
-  FAI-Dreieck werden optimal berechnet und auf der Karte eingezeichnet
-- Airtime, Start- und Landezeit, max. Höhe, Überhöhung über dem Start, Tracklänge, Ø und max. Speed
-- Hike & Fly: Aufstieg zu Fuss, Zeit, Höhenmeter, Pausen
+### Kennzahlen
 
-**Thermik und Gleiten**
-- Alle Thermiken mit Höhengewinn, Ø Steigen, Basis → Top, Kreisen links/rechts und Ø Zeit pro Kreis
-- Versatz des Thermikkerns vom untersten zum obersten Kreis – zeigt, wie stark der Wind den Bart versetzt
-- Wind aus den Kreisen und aus der Drift der Kreismittelpunkte
-- Gleitstrecken mit Gleitzahl über Grund und in der Luft (ohne Windeinfluss)
-- Zeit in der Luft nach Phasen: Kreisen, Steigen, Gleiten, starkes Sinken
+XC-Distanz und Punkte nach XContest, FFVL, FAI oder XC League. Freie Strecke, flaches Dreieck und
+FAI-Dreieck werden optimiert und auf der Karte eingezeichnet. Dazu kommen Airtime, Start- und Landezeit,
+maximale Höhe, Überhöhung über dem Start, Tracklänge sowie mittlere und höchste Geschwindigkeit. Bei Hike &
+Fly zählt die App auch Aufstieg, Gehzeit und Pausen.
 
-**Thermik & Kreisformen**
-- Jeder Vollkreis einzeln vermessen: Durchmesser relativ zur Luft (Wind herausgerechnet), Kreiszeit,
-  berechnete Querlage und Steigen
-- Verteilung der Steigwerte, Kreisdurchmesser gegen Steigen (mit dem Durchmesser, der am besten stieg),
-  Steigen nach Höhenband und nach Tageszeit
-- **Zentrieren:** Steigen Kreis für Kreis ab dem Einflug und die Zeit, bis 80 % des besten Steigens erreicht sind –
-  pro Thermik und im Schnitt
-- Jedes Diagramm als PNG speichern, zum Teilen oder für die Trainerbesprechung
+### Flugbewertung
 
-**Fahrt durch die Luft**
-- Fahrt gegenüber der Luft aus dem Winddreieck (Grundgeschwindigkeit minus Wind aus den Kreisen)
-- Geschätzte Trimmfahrt, höchste Fahrt, Zeit und Phasen im **beschleunigten Flug**
-- Beschleunigt bei Gegen- und Rückenwind – zeigt, ob du nach Sollfahrt fliegst
-- Gleitstrecken mit Fahrt durch die Luft und Wind entlang der Strecke
+Eine kurze Zusammenfassung: was gut lief und wo vermutlich Zeit liegen geblieben ist. Jeder Punkt nennt
+die Uhrzeit und die Messwerte, auf denen er beruht, und lässt sich anklicken, um die Stelle auf Karte und
+Profil zu sehen. Erkannt werden derzeit:
 
-**Karte**
-- Satellit, Sentinel-2, Topo, Strasse und **Relief** (Höhenfarben mit Schummerung, Seen, Flüsse,
-  Strassen und Grenzen – ähnlich der XContest-Reliefkarte, aber aus offenen Daten)
-- Beschriftungen und 3D-Gelände zuschaltbar, Spur nach Phasen, Steigen oder Speed eingefärbt
+- Kreisen im schwachen oberen Teil eines Barts, gemessen am Steigen der letzten Kreise
+- langsames Zentrieren, wenn das Steigen erst nach mehreren Kreisen stand
+- Thermiken, die deutlich unter dem Tagesschnitt lagen
+- Gleitstrecken gegen den Wind oder im Sinken, die in Trimmfahrt geflogen wurden
+- weite Kreise, die schlechter stiegen als enge
+- auf der Habenseite der stärkste Bart, der beste Gleitflug, die schnellste halbe Stunde, schnelles
+  Zentrieren und Fliegen nach Sollfahrt
 
-**Höhenprofil**
-- Höhe und Gelände darunter, eingefärbt nach Phasen, Steigen oder Speed; Maus über Profil oder Karte
-  zeigt die Stelle im jeweils anderen
-- Höhe über Grund aus genauen Geländemodellen (OpenTopography oder eigene DEM-Dateien)
+Die Zeitangaben sind grobe Schätzungen. Gründe wie tiefe Lage, Luftraum oder eine geplante Route kann
+die Auswertung nicht sehen.
 
----
+### Thermik und Gleiten
 
-## 3D-Flugvideo
+Für jede Thermik zeigt die App Höhengewinn, mittleres Steigen, Basis und Top, Kreisrichtung und die
+mittlere Zeit pro Kreis. Der Versatz des Thermikkerns vom untersten zum obersten Kreis zeigt, wie stark
+der Wind den Bart verschoben hat. Wind wird auf zwei Wegen geschätzt: aus der Form der Kreise und aus der
+Drift der Kreismittelpunkte. Gleitstrecken haben eine Gleitzahl über Grund und eine gegenüber der Luft.
+
+### Kreisformen
+
+Jeder Vollkreis wird einzeln vermessen: Durchmesser gegenüber der Luft, Kreiszeit, daraus berechnete
+Querlage und Steigen. Diagramme zeigen die Verteilung der Steigwerte, Durchmesser gegen Steigen, Steigen
+nach Höhe und nach Tageszeit sowie das Zentrieren Kreis für Kreis ab dem Einflug. Jedes Diagramm lässt
+sich als PNG speichern.
+
+### Fahrt durch die Luft
+
+Aus der Geschwindigkeit über Grund und dem Wind aus den Kreisen ergibt sich die Fahrt gegenüber der Luft.
+Die App schätzt daraus die Trimmfahrt, erkennt beschleunigte Phasen und vergleicht, wie oft bei Gegen-
+und bei Rückenwind beschleunigt wurde.
+
+### Karte und Höhenprofil
+
+Kartengrundlagen sind Satellit, Sentinel-2, Topo, Strasse und eine Reliefkarte aus offenen Daten mit
+Höhenfarben, Schummerung, Gewässern und Strassen. Beschriftungen und 3D-Gelände lassen sich zuschalten.
+Die Spur ist nach Flugphase, Steigen oder Geschwindigkeit eingefärbt. Das Höhenprofil zeigt das Gelände
+darunter; die Höhe über Grund kommt aus Terrain Tiles, OpenTopography oder eigenen DEM-Dateien.
+
+## 3D-Video
 
 ![3D-Video, Übersicht zu Beginn mit Reliefkarte und Gipfelnamen](docs/images/landscape-relief-uebersicht.jpg)
 
-**Bild und Kamera**
-- 9:16 (Reel/Story) oder 16:9 (YouTube), Full HD oder HD, 30 bis 180 Sekunden
-- Ruhige Verfolgerkamera, die schnellen Zeitraffern folgt; Intro-Überflug und Abschluss-Übersicht
-- Smart-Highlights: Start, stärkste Thermiken, höchster Punkt und Landung laufen langsamer
-- Karte wählbar (Satellit, Sentinel-2, Topo, OSM, Relief, Gips-Relief), Überhöhung und Kameradistanz einstellbar
+### Bild und Kamera
 
-**Gleitschirm**
-- Schirm-Modelle mit eigenen Farben und Mustern (Zellen, Streckung, 4 Farben, Gurtzeug, Helm)
-- Schirm neigt sich in Kurven, nickt beim Einflug in Thermik und schaukelt beim Verlassen
-- Alternativ als „Glühwürmchen“ – Lichtpunkt mit Leuchtspur
+Hochformat 9:16 oder Querformat 16:9, Full HD oder HD, 30 bis 180 Sekunden. Eine Verfolgerkamera folgt
+dem Schirm auch im schnellen Zeitraffer, am Anfang steht ein Überflug, am Ende eine Übersicht. Start,
+beste Thermiken, höchster Punkt und Landung können langsamer laufen. Karte, Überhöhung und
+Kameradistanz sind einstellbar.
 
-**Mehrere Piloten**
-- Weitere Flüge im selben Gebiet zuschalten, jeder mit eigener Spurfarbe, eigenem Schirm und Namensschild
-- Gleichzeitig geflogene Flüge laufen synchron, sonst werden sie am Start ausgerichtet
-- Pilotenliste mit aktueller Höhe im Bild
+### Schirm und Piloten
 
-**Lern-Ebenen**
-- Thermikschläuche mit Steigwert, versetzt entlang der Kreismittelpunkte
-- **Thermik-Auslöser:** die Thermik-Achse bis zum Boden verlängert, mit Höhe und Hangneigung
+Mehrere Schirmmodelle mit eigenen Farben. Der Schirm neigt sich in Kurven und nickt beim Einflug in eine
+Thermik. Statt des Schirms kann ein Lichtpunkt mit Leuchtspur fliegen. Weitere Flüge vom selben Tag
+lassen sich mit eigener Spurfarbe und eigenem Namen zuschalten; gleichzeitig geflogene Flüge laufen
+synchron.
+
+### Was im Bild erscheint
+
+- Thermikschläuche mit Steigwert, entlang der Kreismittelpunkte versetzt
+- der Thermik-Auslöser: die Achse der Thermik bis zum Boden verlängert, mit Höhe und Hangneigung
 - Gleitzahl auf längeren Gleitstrecken
-- Luftströmung (Partikel) in starken Thermiken
-- **Verblassende Spur:** die Flugspur löst sich nach einstellbarer Zeit auf, die Thermikkreise bleiben stehen
-- Fläche „Höhe über Grund“ (rot unter 150 m), Windpfeil, Gipfel, Hütten und Orte mit Infotafel
-- Entscheidungen im Bild: aktuelle Thermik, „Thermik verlassen“ mit Steigwert, Gleiten/Suche mit Gleitzahl
+- eine Spur, die nach einstellbarer Zeit verblasst, während die Thermikkreise stehen bleiben
+- Höhe über Grund als Vorhang unter der Spur, rot unter 150 m
+- Windpfeil, Gipfel, Hütten und Orte
+- Sonnenstand über die Flugzeit mit Schatten von Schirm und Bergen; Datum und Uhrzeit lassen sich
+  verschieben
+- Wolkenbasis aus Temperatur und Taupunkt des Flugtags (Open-Meteo, Faustformel 125 m × Spread) und
+  Cumulus-Wolken über den Thermiken
 
-**Sonne und Wolken**
-- Sonnenstand über die Flugzeit, **Schattenwurf** von Schirm und Bergen
-- Tageszeit verschieben oder anderes Datum wählen – wie sähe der Flug im Juni um 10 Uhr aus?
-- Sonnen-Panel: Sonnenhöhe und -richtung, Einstrahlung auf flachem Boden und auf dem Hang unter dir
-- **Wolkenbasis** aus Temperatur und Taupunkt des Flugtags (Open-Meteo-Archiv, Faustformel 125 m × Spread),
-  alternativ aus dem Flug geschätzt oder von Hand; Abstand zur Basis im Bild
-- **Cumulus-Wolken** über den Thermiken, die wachsen, während du kreist
+### Ton
 
-**Ton**
-- GEMA-freie Musik, im Browser erzeugt: Ambient, Cinematic, Chill, Lo-Fi Hip-Hop, Synthwave,
-  Deep House, Liquid Drum & Bass – oder eigene Musikdatei
-- Vario-Töne nach Steigen und Sinken mit einstellbaren Schwellen, Startsound beim Abheben
-
----
+Die Musik wird im Browser erzeugt und ist frei von Rechten Dritter, in mehreren Stilen von Ambient bis
+Drum & Bass. Eigene Musikdateien gehen auch. Vario-Töne folgen dem Steigen und Sinken.
 
 ## Datenschutz
 
-- Tracks, Auswertungen und Einstellungen liegen nur im Speicher deines Browsers (IndexedDB).
-  Löschst du die Browserdaten, sind sie weg – die Originaldateien behältst du ja.
-- Aus dem Internet geladen werden nur Karten- und Höhenkacheln, Orte (Wikidata/OpenStreetMap),
-  Gewässer und Strassen für die Reliefkarte (OpenStreetMap) und die Temperaturen für die Wolkenbasis
-  (Open-Meteo). Dafür wird der Kartenausschnitt bzw. der Startort übermittelt, nie der Track.
-- Die Online-Version nutzt Google Analytics nur, wenn du im Banner zustimmst. Ändern kannst du das jederzeit
-  über „Statistik-Einstellungen“ unten in der Seitenleiste.
+Tracks, Auswertungen und Einstellungen liegen im Speicher deines Browsers (IndexedDB). Wenn du die
+Browserdaten löschst, sind sie weg; die Originaldateien hast du weiterhin.
+
+Aus dem Internet lädt die App Karten- und Höhenkacheln, Orte (Wikidata, OpenStreetMap), Gewässer und
+Strassen für die Reliefkarte (OpenStreetMap) und Temperaturen für die Wolkenbasis (Open-Meteo). Übermittelt
+wird dabei der Kartenausschnitt oder der Startort, nie der Track.
+
+Die Online-Version nutzt Google Analytics nur, wenn du im Banner zustimmst. Ändern lässt sich das über
+„Statistik-Einstellungen“ in der Fusszeile.
 
 ## Quellen
 
-Gelände: Terrain Tiles (AWS) · Karten: Esri, Sentinel-2 cloudless (EOX), OpenTopoMap, © OpenStreetMap ·
-Orte: Wikidata · Wetter: Open-Meteo · XC-Wertung: igc-xc-score
+Gelände: Terrain Tiles (AWS). Karten: Esri, Sentinel-2 cloudless (EOX), OpenTopoMap, © OpenStreetMap.
+Orte: Wikidata. Wetter: Open-Meteo. XC-Wertung: igc-xc-score.
 
----
-
-Weitere Ideen und Prioritäten: [docs/ROADMAP.md](docs/ROADMAP.md) · UI-Prüfung: [docs/UI-UX-Review.md](docs/UI-UX-Review.md)
+Weitere Ideen und Prioritäten stehen in [docs/ROADMAP.md](docs/ROADMAP.md), die UI-Prüfung in
+[docs/UI-UX-Review.md](docs/UI-UX-Review.md), die Gestaltungsregeln in [DESIGN.md](DESIGN.md).
 
 ## Für Entwickler
 
 ### Lokal starten
 
-**Windows:** `start.bat` doppelklicken. Beim ersten Start werden die Abhängigkeiten installiert, danach öffnet
-sich der Browser auf http://localhost:5173. Zum Beenden das Konsolenfenster schliessen.
+Unter Windows `start.bat` doppelklicken. Beim ersten Start werden die Abhängigkeiten installiert, danach
+öffnet sich der Browser auf http://localhost:5173. Zum Beenden das Konsolenfenster schliessen.
 
-Voraussetzung: [Node.js](https://nodejs.org) (LTS). Manuell:
+Voraussetzung ist [Node.js](https://nodejs.org) (LTS). Von Hand:
 
 ```bash
 npm install
@@ -164,27 +167,27 @@ npm run dev
 |---|---|
 | `npm test` | Tests |
 | `npm run build` | Produktions-Build nach `dist/` |
-| `npm run score -- <datei.igc>` | XC-Scoring einer Datei auf der Kommandozeile |
+| `npm run score -- <datei.igc>` | XC-Wertung einer Datei auf der Kommandozeile |
 
-Lokal gespeicherte Flüge gehören zur Adresse, unter der die App läuft: `localhost:5173` und die Online-Version
+Gespeicherte Flüge gehören zur Adresse, unter der die App läuft: `localhost:5173` und die Online-Version
 haben getrennte Speicher.
 
 ### Online-Version (GitHub Pages)
 
-Die App liegt unter https://tobmuc.github.io/track-auswertung/. Derzeit wird sie aus dem Branch `gh-pages`
-ausgeliefert, der den Inhalt von `dist/` enthält: neu bauen und den Inhalt von `dist/` (plus eine leere
-`.nojekyll`) als neuen Commit auf `gh-pages` pushen.
+Die App liegt unter https://tobmuc.github.io/track-auswertung/ und wird aus dem Branch `gh-pages`
+ausgeliefert, der den Inhalt von `dist/` enthält. Zum Veröffentlichen neu bauen und den Inhalt von
+`dist/` mit einer leeren `.nojekyll` als neuen Commit auf `gh-pages` pushen.
 
-Automatisch bei jedem Push geht es mit dem Workflow `.github/workflows/pages.yml` (baut, testet, veröffentlicht).
-Er ist vorbereitet, aber noch nicht im Repo: Workflow-Dateien lassen sich nur mit der GitHub-Berechtigung
-`workflow` hochladen (`gh auth refresh -h github.com -s workflow`). Danach die Datei committen und unter
-*Settings → Pages* die Quelle auf „GitHub Actions“ stellen.
+Der Workflow `.github/workflows/pages.yml` würde das bei jedem Push erledigen. Er liegt bereit, ist aber
+noch nicht im Repo, weil Workflow-Dateien die GitHub-Berechtigung `workflow` brauchen
+(`gh auth refresh -h github.com -s workflow`). Danach die Datei committen und unter Settings, Pages die
+Quelle auf „GitHub Actions“ stellen.
 
-Welche Version online ist, steht in der Fusszeile: `v0.4.0, Build 16, 1a2b3c4, 05.11.2026`
-(Version aus `package.json`, Build = Anzahl Commits, Commit-Kürzel, Build-Datum; ein `+` hinter dem Commit heisst:
-mit nicht committeten Änderungen gebaut). Ein Klick öffnet den Commit auf GitHub.
+Die Fusszeile zeigt, welche Version online ist, zum Beispiel `v0.5.0, Build 20, 1a2b3c4, 05.11.2026`:
+Version aus `package.json`, Anzahl Commits, Commit-Kürzel und Build-Datum. Ein `+` hinter dem Commit
+bedeutet, dass mit nicht committeten Änderungen gebaut wurde. Ein Klick öffnet den Commit auf GitHub.
 
-Lokal testen wie auf Pages: `npm run build`, dann `npx vite preview --base /track-auswertung/`.
+So testest du lokal wie auf Pages: `npm run build`, dann `npx vite preview --base /track-auswertung/`.
 
-Google Analytics (GA4, Mess-ID in `.env.production`) ist nur im gebauten Online-Stand aktiv und lädt erst nach
-Zustimmung im Banner. Ohne `VITE_GA_ID` wird ohne Analytics gebaut.
+Google Analytics (GA4, Mess-ID in `.env.production`) ist nur im gebauten Online-Stand aktiv und lädt erst
+nach Zustimmung im Banner. Ohne `VITE_GA_ID` wird ohne Analytics gebaut.

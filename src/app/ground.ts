@@ -291,7 +291,7 @@ async function computeGround(tl: Timeline, s: typeof groundSettings, onProgress?
   if (s.source === 'opentopo') {
     label = `OpenTopography ${s.dem}`;
     if (!s.apiKey) {
-      warning = t('Kein OpenTopography-API-Key eingetragen – verwende Terrain Tiles (AWS).');
+      warning = t('Kein OpenTopography-API-Key eingetragen, deshalb Terrain Tiles (AWS).');
     } else {
       const tiles = new Map<string, number[]>();
       for (let i = 0; i < n; i++) {
@@ -325,7 +325,7 @@ async function computeGround(tl: Timeline, s: typeof groundSettings, onProgress?
   } else if (s.source === 'file') {
     label = t(SOURCE_LABEL.file);
     const files = await db.demFiles.toArray();
-    if (!files.length) warning = t('Keine DEM-Dateien importiert – verwende Terrain Tiles (AWS).');
+    if (!files.length) warning = t('Keine DEM-Dateien importiert, deshalb Terrain Tiles (AWS).');
     // finest grid first
     files.sort((a, b) => a.grid.dx - b.grid.dx);
     for (let i = 0; i < n; i++) {
@@ -344,7 +344,7 @@ async function computeGround(tl: Timeline, s: typeof groundSettings, onProgress?
   if (missing.length) {
     if (missing.length < n) {
       label += ` + ${SOURCE_LABEL.terrarium}`;
-      if (s.source === 'file' && !warning) warning = `${Math.round((missing.length / n) * 100)} % ${t('des Tracks liegen ausserhalb der DEM-Dateien – dort Terrain Tiles (AWS).')}`;
+      if (s.source === 'file' && !warning) warning = `${Math.round((missing.length / n) * 100)} % ${t('des Tracks liegen ausserhalb der DEM-Dateien. Dort gelten Terrain Tiles (AWS).')}`;
     } else label = SOURCE_LABEL.terrarium;
     await terrariumAt(tl.lat, tl.lon, missing, ground, (d, tot) => onProgress?.(t('Lade Terrain Tiles'), d, tot));
   }

@@ -14,6 +14,7 @@ import GroundPanel from './GroundPanel.vue';
 import ProfileChart from './ProfileChart.vue';
 import TrackMap from './TrackMap.vue';
 import ThermalCircles from './ThermalCircles.vue';
+import FlightReview from './FlightReview.vue';
 import { ACCEL_DELTA_KMH, centring, meanOf, type Centring } from '../core';
 
 const props = defineProps<{ id: number }>();
@@ -122,6 +123,12 @@ const kpis = computed(() => {
 });
 
 type Group = { title: string; rows: [string, string][] };
+
+/** jump to a point: marker on map and profile, map back into view */
+function showAt(idx: number) {
+  hoverIdx.value = idx;
+  window.scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+}
 
 /** title and readout cover the lower part of the map */
 const heroPad = window.matchMedia('(max-width: 800px)').matches ? 170 : 230;
@@ -332,6 +339,8 @@ watch(() => props.id, load);
       <a class="btn primary video-btn" :href="`#/a/${id}/3d`">{{ t('3D-Video erstellen') }}</a>
       <button @click="remove">{{ t('Löschen') }}</button>
     </div>
+
+    <FlightReview v-if="res.flight" class="wrap" :result="res" @select="showAt" />
 
     <section class="wrap profile">
       <div class="profile-head">

@@ -563,7 +563,7 @@ onUnmounted(() => {
         </div>
         <div v-if="videoUrl && !fullscreen" class="result panel" :class="{ stale: outdated }">
           <p v-if="outdated" class="stale-note">
-            {{ t('Einstellungen geändert – dieses Video zeigt noch den alten Stand.') }}
+            {{ t('Einstellungen geändert. Dieses Video zeigt noch den alten Stand.') }}
             <button class="primary" :disabled="exporting || !encodeOk" @click="startExport">{{ t('Video neu erstellen') }}</button>
           </p>
           <video :src="videoUrl" controls playsinline />
@@ -584,7 +584,7 @@ onUnmounted(() => {
           <label>{{ t('Qualität') }}
             <select v-model.number="opt.quality"><option :value="1080">Full HD</option><option :value="720">{{ t('HD (schneller)') }}</option></select>
           </label>
-          <label class="check"><input v-model="opt.highlights" type="checkbox" /> {{ t('Smart-Highlights (Start, beste Thermiken, höchster Punkt, Landung langsamer)') }}</label>
+          <label class="check"><input v-model="opt.highlights" type="checkbox" /> {{ t('Start, beste Thermiken, höchsten Punkt und Landung langsamer zeigen') }}</label>
         </fieldset>
         <fieldset>
           <legend>{{ t('Gelände') }}</legend>
@@ -681,7 +681,7 @@ onUnmounted(() => {
             <input v-model.number="opt.cloudManual" type="range" min="800" max="5000" step="50" :disabled="!opt.clouds" />
           </label>
           <p v-if="opt.clouds" class="muted small">
-            <template v-if="opt.cloudMode === 'api' && cloudInfo">{{ t('Basis') }} {{ cloudInfo }} – {{ t('Formel') }}: {{ t('Höhe') }} + {{ M_PER_K_SPREAD }} m × (T − Td).</template>
+            <template v-if="opt.cloudMode === 'api' && cloudInfo">{{ t('Basis') }} {{ cloudInfo }}. {{ t('Formel') }}: {{ t('Höhe') }} + {{ M_PER_K_SPREAD }} m × (T − Td).</template>
             <template v-if="flightBase"> {{ t('Höchste Thermik im Flug') }}: {{ Math.round(flightBase - 100) }} m.</template>
             {{ cloudStatus }}
           </p>
@@ -749,7 +749,7 @@ onUnmounted(() => {
         <button class="primary big" :disabled="!plan || exporting || !encodeOk" @click="startExport">
           {{ exporting ? t('Video wird erstellt …') : `${t(videoUrl ? 'Video neu erstellen' : 'Video erstellen')} (${exportSize.w}×${exportSize.h})` }}
         </button>
-        <p v-if="!encodeOk" class="error">{{ t('Dieser Browser unterstützt kein WebCodecs – bitte Chrome, Edge oder Safari 17+ verwenden.') }}</p>
+        <p v-if="!encodeOk" class="error">{{ t('Dieser Browser kann keine Videos erzeugen (WebCodecs fehlt). Chrome, Edge oder Safari ab 17 können es.') }}</p>
         <p class="muted small">{{ t('Das Video wird Bild für Bild im Browser gerendert, nichts verlässt deinen Rechner.') }} {{ t('Gelände') }}: Terrain Tiles (AWS)<template v-if="opt.texture !== 'relief'">, {{ t('Karte') }}: {{ MAP_SOURCES[opt.texture].attribution }}</template>.</p>
       </aside>
     </div>

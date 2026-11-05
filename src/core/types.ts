@@ -1,4 +1,5 @@
 import type { AirspeedStats } from './airspeed';
+import type { FlightReview } from './review';
 export type Sport = 'paragliding' | 'hikefly' | 'hanggliding' | 'hiking';
 
 /** One GPS fix. Times in ms since epoch (UTC), altitudes in m MSL. */
@@ -172,6 +173,8 @@ export interface FlightStats {
   glides: Glide[];
   /** airspeed and accelerated flight, null without enough straight flight with a wind estimate */
   airspeed: Omit<AirspeedStats, 'air'> | null;
+  /** what went well and where there was likely room for improvement */
+  review: FlightReview;
   winds: Wind[];
   wind: Wind | null;
   modeShare: Record<FlightMode, number>;
