@@ -113,7 +113,10 @@ function facts(a: ActivityRecord) {
 <template>
   <div class="app" @dragover.prevent="dragging = true" @dragleave.self="dragging = false" @drop.prevent="onDrop">
     <header class="top">
-      <a class="mark" href="#/">Track-Auswertung</a>
+      <a class="mark" href="#/" aria-label="Track-Auswertung">
+        <svg class="mark-icon" width="28" height="28" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#2b3833" /><path d="M0 54 L14 44 L23 49 L36 38 L50 47 L64 41 V64 H0 Z" fill="#2f4a3f" /><path d="M0 54 L14 44 L23 49 L36 38 L50 47 L64 41" fill="none" stroke="#aab4ab" stroke-width="2.4" stroke-linejoin="round" /><g fill="none" stroke="#f0c24b" stroke-width="3.8"><ellipse cx="31" cy="34" rx="6.5" ry="2.6" /><ellipse cx="34.5" cy="25" rx="11" ry="3.6" /><ellipse cx="39" cy="14.5" rx="15.5" ry="4.6" stroke-width="4.2" /></g></svg>
+        <span>Track<em>-Auswertung</em></span>
+      </a>
       <div class="flights">
         <button class="flights-btn" :aria-expanded="menuOpen" aria-controls="flight-menu" @click="menuOpen = !menuOpen">
           <span class="flights-label">{{ current?.title ?? t('Deine Flüge') }}</span>
@@ -215,7 +218,9 @@ function facts(a: ActivityRecord) {
   padding: 0 20px; background: rgba(27, 36, 33, .94); border-bottom: 1px solid var(--rule);
   backdrop-filter: blur(6px);
 }
-.mark { color: var(--snow); text-decoration: none; font-weight: 750; font-size: var(--fs-3); font-variation-settings: var(--wide); white-space: nowrap; }
+.mark { display: flex; align-items: center; gap: 9px; color: var(--snow); text-decoration: none; font-weight: 750; font-size: var(--fs-3); font-variation-settings: var(--wide); white-space: nowrap; }
+.mark em { font-style: normal; color: var(--lift); }
+.mark-icon { flex: none; border-radius: 6px; }
 .flights { position: relative; min-width: 0; flex: 0 1 360px; }
 .flights-btn { display: flex; align-items: center; gap: 8px; width: 100%; background: transparent; border-color: var(--rule); }
 .flights-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; text-align: left; }
@@ -294,7 +299,7 @@ button.link { background: none; border: none; padding: 0; color: var(--lichen); 
 
 @media (max-width: 800px) {
   .top { gap: 10px; padding: 0 12px; }
-  .mark { display: none; }
+  .mark span { display: none; }
   .flights { flex: 1; }
   .top-actions { gap: 6px; }
   /* the landscape video stays whole on a phone; the text moves below it */

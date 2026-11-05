@@ -39,6 +39,8 @@ const opt = reactive({
   exaggeration: 1.2,
   camDistance: 1,
   gliderSize: 1,
+  /** factor on the bank angle of the glider model, 1 = as measured */
+  bankScale: 1,
   highlights: true,
   thermals: true,
   drift: true,
@@ -309,6 +311,7 @@ function rebuildScene() {
     texture: opt.texture === 'relief' ? null : (textures.get(opt.texture) ?? null),
     exaggeration: opt.exaggeration,
     gliderSize: opt.gliderSize,
+    bankScale: opt.bankScale,
     glider: { ...gliderChoice.designs[gliderChoice.preset] },
     pilotStyle: opt.pilotStyle,
     windOpacity: opt.windOpacity,
@@ -499,7 +502,7 @@ watch(gliderChoice, () => {
   clearTimeout(gliderTimer);
   gliderTimer = window.setTimeout(rebuildScene, 150);
 }, { deep: true });
-watch(() => [opt.exaggeration, opt.windOpacity, opt.particles, opt.thermals, opt.drift, opt.glides, opt.pois, opt.pilotStyle, opt.curtain, opt.wind, opt.contours, opt.gliderSize,
+watch(() => [opt.exaggeration, opt.windOpacity, opt.particles, opt.thermals, opt.drift, opt.glides, opt.pois, opt.pilotStyle, opt.curtain, opt.wind, opt.contours, opt.gliderSize, opt.bankScale,
   opt.fadeMin, opt.triggers, opt.clouds, opt.cloudMode, opt.cloudManual, opt.sunShadows, opt.sunHourOffset, opt.sunDate], rebuildScene);
 watch(() => [opt.clouds, opt.cloudMode], () => void loadCloudSeries());
 watch(() => companionSel.map((c) => [c.id, c.color, c.preset]), () => void setupCompanions(), { deep: true });
@@ -602,6 +605,10 @@ onUnmounted(() => {
           </label>
           <label>{{ t('Grösse Gleitschirm') }}: ×{{ opt.gliderSize.toFixed(1) }}
             <input v-model.number="opt.gliderSize" type="range" min="0.5" max="3" step="0.1" />
+          </label>
+          <label>{{ t('Querlage überhöhen') }}: ×{{ opt.bankScale.toFixed(1) }}{{ opt.bankScale === 1 ? ` (${t('wie gemessen')})` : '' }}
+            <input v-model.number="opt.bankScale" type="range" min="1" max="2.5" step="0.1" />
+            <small class="muted">{{ t('Nur die Darstellung des Schirms; die Datenleiste zeigt weiter die gemessene Querlage.') }}</small>
           </label>
           <label v-if="opt.texture !== 'relief'" class="check"><input v-model="opt.contours" type="checkbox" /> {{ t('Höhenlinien') }}</label>
         </fieldset>

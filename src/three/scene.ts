@@ -38,6 +38,8 @@ export interface SceneOptions {
   cloudBase: ((t: number) => number) | null;
   /** Glider size on screen (1 = span = GLIDER_SCREEN × camera distance; never below real size) */
   gliderSize: number;
+  /** factor on the drawn bank angle (1 = as measured); the HUD keeps the measured value */
+  bankScale?: number;
   glider: GliderDesign;
   /** how the pilot is shown in flight */
   pilotStyle: 'glider' | 'firefly' | 'both';
@@ -818,7 +820,7 @@ export class FlightScene {
       // yaw turns +Z (model forward) into the direction of travel, roll banks into the turn,
       // a positive x rotation tips the nose down
       const { roll, pitch } = this.attitude(fi, video);
-      this.glider.rotation.set(-pitch, Math.atan2(hx, hz), roll);
+      this.glider.rotation.set(-pitch, Math.atan2(hx, hz), this.drawnBank(roll));
     }
     const g = lerpAt(m.ground, fi) * ex;
     (this.dropLine.geometry as THREE.BufferGeometry).setFromPoints([p, new THREE.Vector3(p.x, g, p.z)]);
@@ -964,7 +966,7 @@ export class FlightScene {
       }
       k.glider.position.copy(p);
       k.glider.scale.setScalar(Math.max(1, (d * GLIDER_SCREEN * this.o.gliderSize) / GLIDER_SPAN));
-      k.glider.rotation.set(-lerpAt(cm.pitch, cfi), Math.atan2(lerpAt(cm.hx, cfi), lerpAt(cm.hz, cfi)), lerpAt(cm.bank, cfi));
+      k.glider.rotation.set(-lerpAt(cm.pitch, cfi), Math.atan2(lerpAt(cm.hx, cfi), lerpAt(cm.hz, cfi)), this.drawnBank(lerpAt(cm.bank, cfi)));
       const h = d * 0.03;
       k.tag.position.set(p.x, p.y + d * 0.035, p.z);
       k.tag.scale.set(h * k.tag.userData.aspect, h, 1);
@@ -1018,6 +1020,12 @@ export class FlightScene {
     this.trailHaloMat.resolution.set(width, height);
     this.trailCoreMat.linewidth = Math.max(2, height / 360);
     this.trailHaloMat.linewidth = Math.max(6, height / 110);
+  }
+
+  /** Bank as drawn: measured bank times the chosen factor, kept below 70° */
+  private drawnBank(roll: number) {
+    const k = this.o.bankScale ?? 1;
+    return Math.max(-1.22, Math.min(1.22, roll * k));
   }
 
   /** Bank and pitch from the track, low-passed over video frames, plus a damped shake after each thermal exit */
