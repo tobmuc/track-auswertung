@@ -963,20 +963,14 @@ export class FlightScene {
     }
 
     for (const th of this.thermalObjs) {
-      // already stands, faint, while the glider approaches (3 s of video before the first turn);
-      // from the first turn on it glows up to the height the glider has climbed to, rising with it
-      const a = all ? 1 : this.appear(th.start, fi, 0.8, video, 3);
+      // already stands, faint, while the glider approaches (1.5 s of video before the first turn);
+      // at the first turn the glow runs up the whole tube within 0.8 s
+      const a = all ? 1 : this.appear(th.start, fi, 0.4, video, 1.5);
       th.group.visible = a > 0.001;
       if (th.group.visible) {
         fadeGroup(th.group, a);
         let grow = 1;
-        if (!all && fi < th.start) grow = 0;
-        else if (!all && fi < th.end) {
-          let hi = -Infinity;
-          for (let k = th.start, e = Math.floor(fi); k <= e; k++) hi = Math.max(hi, m.alt[k] * ex);
-          hi = Math.max(hi, p.y);
-          grow = Math.min(1, Math.max(0, (hi - th.y0) / Math.max(1, th.y1 - th.y0))) + 0.06;
-        }
+        if (!all && fi < th.end) grow = this.appear(th.start, fi, 0.8, video) * 1.08;
         th.funnel.uniforms.uGrow.value = grow;
       }
       const d = this.camera.position.distanceTo(th.label.position);
