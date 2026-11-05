@@ -82,3 +82,69 @@ Die Spalte **Status** sagt, was mit diesem Commit schon behoben ist.
 1. **Sofort (erledigt):** K1–K2, H1–H6, M1–M5.
 2. **Als Nächstes:** M7 Touch-Auswahl auf Profil/Karte, M8 Sprungnavigation, M6 eigener Löschen-Dialog mit Rückgängig.
 3. **Aufräumen:** N1 Typo-/Spacing-Tokens, N2 gemeinsames Chart-Modul, N3 Ladeanzeige.
+
+---
+
+## Warum die Oberfläche „nach KI“ aussieht
+
+Abgeglichen mit den Regeln aus Anthropics Skill
+[frontend-design](https://github.com/anthropics/skills/tree/main/skills/frontend-design), dem
+Datenvisualisierungs-Kapitel aus [Nutlope/hallmark](https://github.com/Nutlope/hallmark) und
+[pbakaus/impeccable](https://github.com/pbakaus/impeccable). Jede dieser Quellen nennt typische
+Erkennungsmerkmale generierter Oberflächen. Bei uns treffen fast alle zu:
+
+| Merkmal („Tell“) | Wo bei uns |
+|---|---|
+| Fast-schwarzer Hintergrund mit **einer** grellen Akzentfarbe | `#0d1117` (das GitHub-Dark-Grau) + Orange `#ff8a3d`, `style.css:2-8` |
+| Grossgeschriebene, gesperrte Mini-Labels über jedem Block | `.label` (11 px, uppercase, 0.06em) `style.css:32`, auf allen KPI-Kacheln und Gruppen |
+| Eyebrow über der Überschrift, mit Mittelpunkten verbunden | „GLEITSCHIRM · HIKE & FLY · DRACHEN“ im Hero; Meta-Zeilen „Flug 12:21–16:38 · OXA3 · Asia/Bishkek“ |
+| Ein Wort der Überschrift farbig hervorgehoben | „Dein Flug in 3D. **In einer Minute.**“ (orange) |
+| Emoji-Chips als Feature-Liste | 🏆 🌀 🎬 🪂 ☀️ 🔒 im Hero |
+| Alles in gleich runden Karten (12 px) mit gleichem Rahmen | `.panel`, KPI-Kacheln, Diagrammboxen, Chips – keine Hierarchie |
+| KPI-Konfetti | vier gleich grosse Zahlenkacheln oben, fünf weitere bei Kreisformen |
+| Regenbogen-Farben in Diagrammen | Vario-Skala mit 8 Farbtönen in Histogramm, Höhenbändern, Tageszeit |
+| Pulsierender „Live“-Punkt ohne Live-Daten | Beschriftung des Demo-Videos |
+| Systemschrift / Inter ohne bewusste Wahl | `style.css:13` |
+
+## Was nicht nach KI aussieht: Richtung aus dem Thema
+
+Die Vorschläge der Skills laufen auf dasselbe hinaus: **Gestaltung aus dem Gegenstand ableiten**, nicht aus
+einem App-Baukasten. Beim Gleitschirmfliegen heisst das: Gelände, Karte, Luft, Instrumente. Die zwei
+tracktale-Screenshots zeigen das gut: Das Gelände trägt das Bild, die Zahlen sitzen ruhig darüber, die
+Einheiten sind klein und neben der Zahl, kein Chrom drumherum.
+
+Drei mögliche Richtungen (nur eine wählen und konsequent umsetzen):
+
+1. **Landeskarte.** Heller Grund wie eine topografische Karte (kein Creme-Ton, sondern kühles Kartenweiss),
+   Höhenlinien als Hintergrundtextur, Gewässerblau und Waldgrün als Funktionsfarben, Spur in Rot wie ein
+   eingezeichneter Wanderweg. Schrift: eine Grotesk mit Kartencharakter (z. B. *Frutiger*-artig, frei:
+   *Source Sans 3* oder *Public Sans*). Zahlen tabellarisch.
+2. **Cockpit / Instrument.** Dunkel bleibt, aber als Instrument: Ziffern gross und schmal (z. B. *Barlow
+   Condensed*), Skalen statt Karten, Farbe nur mit Bedeutung (Steigen grün, Sinken rot/blau wie im Vario),
+   keine Kacheln, sondern Instrumentenzeilen mit feinen Linien.
+3. **Gelände zuerst.** Die Karte bzw. das 3D-Gelände füllt die Seite, Kennzahlen liegen als ruhige,
+   halbtransparente Leiste darauf (wie in den tracktale-Screenshots), Details klappen als Blatt von unten
+   auf. Am nächsten an der 3D-Video-Ästhetik der App.
+
+Gemeinsam für alle drei:
+- Labels in normaler Schreibweise, keine Grossbuchstaben-Eyebrows, keine Mittelpunkt-Ketten.
+- Eine Schriftfamilie bewusst wählen, klare Grössenskala (5 Stufen).
+- Unterschiedliche Formen für unterschiedliche Inhalte: Kennzahlen als Zeile, nicht als Kachelwand; Tabellen
+  ohne Kartenrahmen; nur die Karte bekommt einen Rahmen.
+- Diagramme mit einer Akzent-Serie, Rest neutral (hallmark: „one series that argues“).
+- Emoji raus aus der Oberfläche; wenn Symbole, dann eigene, schlichte Linien-Icons.
+- Animation nur, wo der Nutzer etwas auslöst.
+
+## Weitere Skill-Repos zum Thema
+
+| Repo | Sterne | Lizenz | Kern |
+|---|---|---|---|
+| [anthropics/skills – frontend-design](https://github.com/anthropics/skills) | 188 k | eigene | Liste der häufigsten KI-Merkmale, Zwei-Schritt-Plan (Tokens → Kritik → Bau) |
+| [pbakaus/impeccable](https://github.com/pbakaus/impeccable) | 103 k | Apache-2.0 | Befehle `critique`, `audit`, `polish`, „AI slop“-Erkennung, Qualitätsboden |
+| [Leonxlnx/taste-skill](https://github.com/Leonxlnx/taste-skill) | 110 k | MIT | Art Direction mit Referenzbildern und Browser-Check statt Standardmuster |
+| [Nutlope/hallmark](https://github.com/Nutlope/hallmark) | 48 k | – | Anti-Slop-Skill; starkes Kapitel zu Diagrammen und Dark Mode |
+| [nextlevelbuilder/ui-ux-pro-max-skill](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill) | 145 k | MIT | Stil-/Paletten-/Schrift-Datenbank nach Branche |
+| [VoltAgent/awesome-design-md](https://github.com/VoltAgent/awesome-design-md) | 126 k | MIT | DESIGN.md-Vorlagen echter Marken als Ausgangspunkt |
+| [emilkowalski/skills](https://github.com/emilkowalski/skills) | 54 k | MIT | Feinschliff für Interaktion und Animation |
+| [jakubkrehel/make-interfaces-feel-better](https://github.com/jakubkrehel/make-interfaces-feel-better) | 4 k | MIT | Kleine Details, die eine Oberfläche hochwertig wirken lassen |
+| [vercel-labs/web-interface-guidelines](https://github.com/vercel-labs/web-interface-guidelines) | 1 k | MIT | Prüfliste für Web-Oberflächen (Fokus, Formulare, Zahlen, Ladezustände) |

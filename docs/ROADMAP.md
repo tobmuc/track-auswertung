@@ -161,3 +161,12 @@ nach Fliegen klingend, nicht zu nah an „steiglinie“ oder „tracktale“.
 **Favoriten:** **Bartlog** (deutschsprachige Piloten verstehen es sofort, kurz, gut als Domain/App-Name)
 und **Liftlab** (international, betont die Analyse). Vor der Entscheidung prüfen: Domain (.app/.io/.ch),
 Instagram-Handle, Markenregister (DPMA/EUIPO), GitHub-Name.
+
+## 7. Aus den tracktale-Screenshots (Referenz)
+
+- **Reichweite des aktuellen Gleitflugs** als Fläche im Gelände („Reichweite 1:10.6 · dieser Gleitflug“).
+- **Wanderer-Figur** im Hike-Teil statt Schirm, Spur in Grün; Phasen-Badge „Wanderung“/„Flug“ mit Uhrzeit.
+- **Foto-Pins** an der Stelle, wo das Bild aufgenommen wurde (EXIF-GPS, lokal gelesen).
+- **Bodenbedeckung** (ESA WorldCover: Wald, Fels, Gletscher, Seen) statt Satellitenbild als ruhige Kartenbasis.
+- **Kennzahlen-Leiste**: 3–4 Werte, Einheit klein neben der Zahl, je nach Phase andere Werte
+  (Wandern: Höhe, Aufstieg, unterwegs; Flug: Höhe, über Grund, Vario, Gleitzahl).
