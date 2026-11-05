@@ -65,6 +65,12 @@ function profileImage(m: Model, w: number, h: number): OffscreenCanvas {
   return img;
 }
 
+/** 0..1 with soft start and end */
+const smooth = (x: number) => {
+  const u = Math.min(1, Math.max(0, x));
+  return u * u * (3 - 2 * u);
+};
+
 export function drawHud(g: CanvasRenderingContext2D, W: number, H: number, m: Model, plan: Plan, frameNo: number, o: HudOptions) {
   if (!o.enabled) return;
   panelAlpha = o.panelOpacity;
@@ -209,8 +215,11 @@ export function drawHud(g: CanvasRenderingContext2D, W: number, H: number, m: Mo
     // --- decisions: current thermal, exit, glide search
     if (o.decisions) {
       let msg: { head: string; body: string; color: string } | null = null;
+      // frame at which the current message started: it fades and slides in from there
+      let since = -1;
       const k = m.thermals.findIndex((th) => fi >= th.start && fi <= th.end);
       if (k >= 0) {
+        since = plan.thermalEnter[k];
         const th = m.thermals[k];
         const gain = lerpAt(m.alt, fi) - th.baseAlt;
         const secs = (t - tl.t[th.start]) / 1000;
@@ -220,6 +229,7 @@ export function drawHud(g: CanvasRenderingContext2D, W: number, H: number, m: Mo
         if (last) {
           const exitFrame = plan.thermalExit[last.j];
           if (exitFrame >= 0 && frameNo - exitFrame < plan.fps * 3) {
+            since = exitFrame;
             const weak = last.th.exitClimb < last.th.avgClimb * 0.5;
             msg = {
               head: tr('Thermik verlassen'),
@@ -230,6 +240,7 @@ export function drawHud(g: CanvasRenderingContext2D, W: number, H: number, m: Mo
             const lost = m.alt[last.th.end] - lerpAt(m.alt, fi);
             const dist = lerpAt(m.dist, fi) - m.dist[last.th.end];
             // running glide ratio since leaving the thermal (once there is enough distance to be meaningful)
+            since = exitFrame >= 0 ? exitFrame + plan.fps * 3 : -1;
             const gz = lost > 20 && dist > 0.3 ? ` · ${tr('GZ')} 1:${num((dist * 1000) / lost, 1)}` : '';
             msg = {
               head: tr('Gleiten / Suche'),
@@ -242,6 +253,10 @@ export function drawHud(g: CanvasRenderingContext2D, W: number, H: number, m: Mo
       if (msg && !hike) {
         const bw = 520 * S;
         const by = W > H ? pad : pad + 150 * S;
+        const a = since >= 0 ? smooth((frameNo - since) / (plan.fps * 0.6)) : 1;
+        g.save();
+        g.globalAlpha = a;
+        g.translate(-(1 - a) * 40 * S, 0);
         panel(g, pad, by, bw, 104 * S, 16 * S);
         g.fillStyle = msg.color;
         g.fillRect(pad, by, 8 * S, 104 * S);
@@ -250,6 +265,38 @@ export function drawHud(g: CanvasRenderingContext2D, W: number, H: number, m: Mo
         g.fillStyle = '#fff';
         g.font = `600 ${32 * S}px system-ui, sans-serif`;
         g.fillText(msg.body, pad + 26 * S, by + 82 * S, bw - 40 * S);
+        g.restore();
+      }
+    }
+
+    // --- caption for the best thermal of the flight, fades in and out over its first seconds
+    if (fr.phase === 'play' && m.thermals.length) {
+      let best = 0;
+      m.thermals.forEach((th, j) => { if (th.avgClimb > m.thermals[best].avgClimb) best = j; });
+      const f0 = plan.thermalEnter[best];
+      const show = plan.fps * 4.5;
+      const d = frameNo - f0 - plan.fps * 0.8;
+      if (f0 >= 0 && d >= 0 && d < show) {
+        const a = Math.min(smooth(d / (plan.fps * 0.6)), smooth((show - d) / (plan.fps * 0.8)));
+        const value = `Ø +${num(m.thermals[best].avgClimb, 1)} m/s`;
+        const label = `${tr('Dein bestes Steigen')}: `;
+        const fs = (W > H ? 46 : 40) * S;
+        g.save();
+        g.globalAlpha = a;
+        g.font = `800 ${fs}px system-ui, sans-serif`;
+        const w1 = g.measureText(label).width;
+        const w2 = g.measureText(value).width;
+        const bw = Math.min(W - pad * 2, w1 + w2 + 64 * S);
+        const bh = fs * 1.7;
+        const bx = (W - bw) / 2;
+        const by = H * (W > H ? 0.62 : 0.6) + (1 - a) * 24 * S;
+        panel(g, bx, by, bw, bh, bh / 2);
+        g.textBaseline = 'middle';
+        g.fillStyle = '#fff';
+        g.fillText(label, bx + 32 * S, by + bh / 2);
+        g.fillStyle = '#ff9f43';
+        g.fillText(value, bx + 32 * S + w1, by + bh / 2);
+        g.restore();
       }
     }
   }

@@ -370,6 +370,7 @@ const EN: Record<string, string> = {
   "Beschriftung": "Labels",
   "3D-Gelände": "3D terrain",
   "Thermik-Hotspots": "Thermal hotspots",
+  "Dein bestes Steigen": "Your best climb",
   "Skyways": "Skyways",
   "Wo Thermik häufig ausgelöst wird, aus Hunderttausenden Flügen (thermal.kk7.ch)": "Where thermals are often triggered, from hundreds of thousands of flights (thermal.kk7.ch)",
   "Wo Piloten häufig im Geradeausflug unterwegs sind (thermal.kk7.ch)": "Where pilots often fly in straight flight (thermal.kk7.ch)",

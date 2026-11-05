@@ -93,7 +93,88 @@ function funnelGeometry(rings: { x: number; y: number; z: number; r: number }[],
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setIndex(index);
+  g.computeVertexNormals();
   return g;
+}
+
+/** 0..1 with soft start and end */
+const ease = (x: number) => {
+  const u = Math.min(1, Math.max(0, x));
+  return u * u * (3 - 2 * u);
+};
+
+/**
+ * Soft glowing column: brighter where the surface faces the camera, fading towards the silhouette,
+ * the bottom and the top, so it reads as a volume of warm air rather than a hard tube.
+ * uGrow (0..1) reveals it from the bottom up.
+ */
+function softColumnMaterial(color: THREE.Color, opacity: number, y0: number, y1: number, fadeTop = 0.35): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      uColor: { value: color.clone() },
+      uOpacity: { value: opacity },
+      uY0: { value: y0 },
+      uY1: { value: y1 },
+      uGrow: { value: 1 },
+      uFadeTop: { value: fadeTop },
+    },
+    // the renderer uses a logarithmic depth buffer: custom shaders need its chunks, or nothing shows
+    vertexShader: `
+      #include <common>
+      #include <logdepthbuf_pars_vertex>
+      varying float vY;
+      varying vec3 vN;
+      varying vec3 vV;
+      void main() {
+        vec4 wp = modelMatrix * vec4(position, 1.0);
+        vY = wp.y;
+        vN = normalize(mat3(modelMatrix) * normal);
+        vV = normalize(cameraPosition - wp.xyz);
+        gl_Position = projectionMatrix * viewMatrix * wp;
+        #include <logdepthbuf_vertex>
+      }`,
+    fragmentShader: `
+      #include <common>
+      #include <logdepthbuf_pars_fragment>
+      uniform vec3 uColor;
+      uniform float uOpacity, uY0, uY1, uGrow, uFadeTop;
+      varying float vY;
+      varying vec3 vN;
+      varying vec3 vV;
+      void main() {
+        #include <logdepthbuf_fragment>
+        float h = clamp((vY - uY0) / max(1.0, uY1 - uY0), 0.0, 1.0);
+        float facing = abs(dot(normalize(vN), normalize(vV)));
+        float a = uOpacity * pow(facing, 1.6);
+        a *= smoothstep(0.0, 0.12, h) * mix(1.0, uFadeTop, smoothstep(0.55, 1.0, h));
+        a *= 1.0 - smoothstep(uGrow - 0.1, uGrow, h);
+        if (a < 0.003) discard;
+        gl_FragColor = vec4(uColor, a);
+        #include <colorspace_fragment>
+      }`,
+    transparent: true,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+}
+
+/** Sets a uniform fade on everything in a group, remembering each material's own opacity */
+function fadeGroup(g: THREE.Object3D, a: number) {
+  g.traverse((o) => {
+    const mats = (o as THREE.Mesh).material;
+    if (!mats) return;
+    for (const mat of Array.isArray(mats) ? mats : [mats]) {
+      if (mat instanceof THREE.ShaderMaterial && mat.uniforms.uOpacity) {
+        mat.userData.base ??= mat.uniforms.uOpacity.value;
+        mat.uniforms.uOpacity.value = mat.userData.base * a;
+        if (mat.uniforms.uGrow) mat.uniforms.uGrow.value = 0.1 + 1.0 * a;
+      } else {
+        mat.userData.base ??= mat.opacity;
+        mat.transparent = true;
+        mat.opacity = mat.userData.base * a;
+      }
+    }
+  });
 }
 
 /**
@@ -388,7 +469,11 @@ export class FlightScene {
   private pilot: THREE.Group;
   private glider: THREE.Group;
   private dropLine: THREE.Line;
-  private thermalObjs: { group: THREE.Group; label: THREE.Sprite; start: number; top: number }[] = [];
+  private thermalObjs: { group: THREE.Group; label: THREE.Sprite; start: number; top: number; rim: LineMaterial }[] = [];
+  /** first video frame at which the timeline index is reached, per index (cached per plan) */
+  private frameCache = { plan: null as Plan | null, map: new Map<number, number>() };
+  /** wind arrow opacity, eased over video frames */
+  private windFade = { frame: -10, a: 0 };
   /** shared material of the thermal rims, width set per frame from the output height */
   private rimMat = new LineMaterial({ vertexColors: true, linewidth: 2, worldUnits: false });
   private glideLabels: { label: THREE.Sprite; end: number }[] = [];
@@ -550,10 +635,9 @@ export class FlightScene {
           // half the original width: hugs the circles more closely
           return { x: ax, y: alt * ex, z: az, r: r * 0.5 * (0.55 + 0.5 * (k / N)) };
         });
-        const funnel = new THREE.Mesh(
-          funnelGeometry(rings),
-          new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.28, side: THREE.DoubleSide, depthWrite: false }),
-        );
+        // soft column of warm air instead of a hard tube
+        const funnel = new THREE.Mesh(funnelGeometry(rings), softColumnMaterial(color, 0.75, rings[0].y, rings[N].y, 0.6));
+        funnel.renderOrder = 1;
         g.add(funnel);
         const top = rings[N];
         // thin rim with a fixed width on screen (a torus got fat when the camera came close)
@@ -567,7 +651,9 @@ export class FlightScene {
         const rimGeo = new LineGeometry();
         rimGeo.setPositions(rim);
         rimGeo.setColors(rimCol);
-        g.add(new Line2(rimGeo, this.rimMat));
+        const rimMat = this.rimMat.clone();
+        rimMat.transparent = true;
+        g.add(new Line2(rimGeo, rimMat));
         const lines = [`+${th.avgClimb.toFixed(1)} m/s`, `+${Math.round(th.gain)} m`];
         if (core.length >= 2) {
           // vertical reference from the base: makes the drift of the core visible
@@ -610,6 +696,20 @@ export class FlightScene {
           );
           axisLine.computeLineDistances();
           g.add(disc, spot, axisLine);
+          // warm air rising from the trigger: a soft glow from the ground up to the lowest circle
+          const gy = trg.h * ex;
+          if (base.y - gy > r) {
+            const col = new THREE.Mesh(
+              funnelGeometry([
+                { x: trg.x, y: gy, z: trg.z, r: base.r * 1.6 },
+                { x: (trg.x + base.x) / 2, y: (gy + base.y) / 2, z: (trg.z + base.z) / 2, r: base.r * 1.3 },
+                { x: base.x, y: base.y, z: base.z, r: base.r },
+              ]),
+              softColumnMaterial(new THREE.Color('#ff9f43'), 0.5, gy, base.y, 1),
+            );
+            col.renderOrder = 1;
+            g.add(col);
+          }
           if (labelled.has(th.idx)) {
             const sl = slopeAt(T, trg.x, trg.z);
             const tl = labelSprite([`${t('Auslöser')} ${Math.round(trg.h)} m`, sl.angle >= 5 ? `${t('Hang')} ${Math.round(sl.angle)}° ${compass(sl.facing)}` : t('flach')], '#ffb74d');
@@ -643,7 +743,7 @@ export class FlightScene {
         g.add(label);
         g.visible = false;
         this.scene.add(g);
-        this.thermalObjs.push({ group: g, label, start: th.start, top: th.topAlt });
+        this.thermalObjs.push({ group: g, label, start: th.start, top: th.topAlt, rim: rimMat });
       }
     }
 
@@ -783,8 +883,10 @@ export class FlightScene {
     this.trackMat.linewidth = Math.max(2.5, height / 300);
     this.ghostMat.resolution.set(width, height);
     this.ghostMat.linewidth = Math.max(1.5, height / 600);
-    this.rimMat.resolution.set(width, height);
-    this.rimMat.linewidth = Math.max(1.5, height / 540);
+    for (const th of this.thermalObjs) {
+      th.rim.resolution.set(width, height);
+      th.rim.linewidth = Math.max(1.5, height / 540);
+    }
 
     // reveal track/curtain up to the current point
     const all = fr.phase === 'outro';
@@ -843,8 +945,9 @@ export class FlightScene {
       // fade out when the camera comes close, so it never flies blind through a cloud
       const d = this.camera.position.distanceTo(cl.center);
       const a = Math.min(1, Math.max(0, (d - cl.R * 1.2) / (cl.R * 2)));
-      for (const mat of cl.mats) mat.opacity = 0.92 * a;
-      cl.group.visible = a > 0.01;
+      const inA = all ? 1 : this.appear(cl.start, fi, 2.5, video);
+      for (const mat of cl.mats) mat.opacity = 0.92 * a * inA;
+      cl.group.visible = a * inA > 0.01;
     }
     for (const tl of this.triggerLabels) {
       const h = this.camera.position.distanceTo(tl.getWorldPosition(new THREE.Vector3())) * 0.035;
@@ -852,7 +955,10 @@ export class FlightScene {
     }
 
     for (const th of this.thermalObjs) {
-      th.group.visible = all || fi >= th.start;
+      // grows from the bottom up and fades in once the pilot reaches the thermal
+      const a = all ? 1 : this.appear(th.start, fi, 1.4, video);
+      th.group.visible = a > 0.001;
+      if (th.group.visible) fadeGroup(th.group, a);
       const d = this.camera.position.distanceTo(th.label.position);
       const h = d * 0.045;
       th.label.scale.set(h * th.label.userData.aspect, h, 1);
@@ -872,14 +978,23 @@ export class FlightScene {
     }
 
     for (const gl of this.glideLabels) {
-      gl.label.visible = all || fi >= gl.end;
+      const a = all ? 1 : this.appear(gl.end, fi, 0.8, video);
+      gl.label.visible = a > 0.001;
+      (gl.label.material as THREE.SpriteMaterial).opacity = a;
       const h = this.camera.position.distanceTo(gl.label.position) * 0.04;
       gl.label.scale.set(h * gl.label.userData.aspect, h, 1);
     }
 
     const t = m.res.timeline.t[Math.round(fi)];
     const w = this.o.layers.wind ? windAt(m, t) : null;
-    if (w && fr.phase === 'play' && !m.isHike[Math.round(fi)]) {
+    const wantWind = !!w && fr.phase === 'play' && !m.isHike[Math.round(fi)];
+    const wf = this.windFade;
+    if (video && Math.abs(video.frameNo - wf.frame) <= 2) {
+      wf.a += ((wantWind ? 1 : 0) - wf.a) * (1 - Math.exp(-Math.abs(video.frameNo - wf.frame) / (0.45 * video.plan.fps)));
+    } else wf.a = wantWind ? 1 : 0;
+    wf.frame = video?.frameNo ?? wf.frame;
+    for (const mat of [this.windArrow.line.material, this.windArrow.cone.material] as THREE.Material[]) mat.opacity = this.o.windOpacity * wf.a;
+    if (wantWind && w) {
       const toRad = ((w.fromDeg + 180) % 360) * (Math.PI / 180);
       const dir = new THREE.Vector3(Math.sin(toRad), 0, -Math.cos(toRad));
       const len = camDist * 0.04 * Math.min(3, 0.6 + w.speedKmh / 10);
@@ -887,7 +1002,35 @@ export class FlightScene {
       this.windArrow.setDirection(dir);
       this.windArrow.setLength(len, len * 0.35, len * 0.22);
       this.windArrow.visible = true;
-    } else this.windArrow.visible = false;
+    } else this.windArrow.visible = wf.a > 0.02; // keeps its last place while it fades out
+  }
+
+  /**
+   * 0..1 fade-in for something that appears when the timeline reaches index idx, over `secs` of video.
+   * Without video frames (single stills) it simply switches.
+   */
+  private appear(idx: number, fi: number, secs: number, video?: { frameNo: number; plan: Plan }): number {
+    if (fi < idx) return 0;
+    if (!video) return 1;
+    const { plan, frameNo } = video;
+    const c = this.frameCache;
+    if (c.plan !== plan) {
+      c.plan = plan;
+      c.map.clear();
+    }
+    let f = c.map.get(idx);
+    if (f == null) {
+      const fr = plan.frames;
+      let lo = 0, hi = fr.length - 1;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (fr[mid].phase === 'intro' || fr[mid].fi < idx) lo = mid + 1;
+        else hi = mid;
+      }
+      f = lo;
+      c.map.set(idx, f);
+    }
+    return ease((frameNo - f) / (secs * plan.fps));
   }
 
   /**
