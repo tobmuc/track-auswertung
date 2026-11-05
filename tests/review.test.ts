@@ -5,7 +5,8 @@ import { analyzeTracks, parseTrack } from '../src/core';
 const FILE = 'fixtures/2026-09-17-XTR-E820273A2ED6-01.IGC';
 
 describe.skipIf(!existsSync(FILE))('Flugbewertung 17.09.2026', () => {
-  const f = analyzeTracks([parseTrack(FILE, readFileSync(FILE, 'utf8'))]).flight!;
+  // the body runs even when the block is skipped: read the file only if it is there
+  const f = existsSync(FILE) ? analyzeTracks([parseTrack(FILE, readFileSync(FILE, 'utf8'))]).flight! : (null as never);
   it('findet Stärken und Verbesserungen mit Daten', () => {
     const r = f.review;
     const fmt = (x: typeof r.good[number]) => `${x.topic} ${Math.round(f.launchTime / 1000) && ''}${Object.entries(x.v).map(([k, v]) => `${k}=${v.toFixed(1)}`).join(' ')}`;

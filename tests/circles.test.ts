@@ -5,7 +5,8 @@ import { analyzeTracks, bands, centring, climbHistogram, parseTrack } from '../s
 const FILE = 'fixtures/2026-09-17-XTR-E820273A2ED6-01.IGC';
 
 describe.skipIf(!existsSync(FILE))('Kreisformen 17.09.2026', () => {
-  const f = analyzeTracks([parseTrack(FILE, readFileSync(FILE, 'utf8'))]).flight!;
+  // the body runs even when the block is skipped: read the file only if it is there
+  const f = existsSync(FILE) ? analyzeTracks([parseTrack(FILE, readFileSync(FILE, 'utf8'))]).flight! : (null as never);
   it('liefert plausible Kreise', () => {
     const c = f.circles;
     const med = (xs: number[]) => [...xs].sort((a, b) => a - b)[xs.length >> 1];

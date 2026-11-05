@@ -186,14 +186,14 @@ haben getrennte Speicher.
 
 ### Online-Version (GitHub Pages)
 
-Die App liegt unter https://tobmuc.github.io/track-auswertung/ und wird aus dem Branch `gh-pages`
-ausgeliefert, der den Inhalt von `dist/` enthält. Zum Veröffentlichen neu bauen und den Inhalt von
-`dist/` mit einer leeren `.nojekyll` als neuen Commit auf `gh-pages` pushen.
+Die App liegt unter https://tobmuc.github.io/track-auswertung/. Jeder Push auf `main` veröffentlicht sie
+automatisch: Der Workflow `.github/workflows/pages.yml` installiert, testet, baut und stellt `dist/` auf
+GitHub Pages (Quelle unter Settings → Pages: „GitHub Actions“). Den Lauf siehst du unter
+[Actions](https://github.com/tobmuc/track-auswertung/actions); von dort lässt er sich auch von Hand starten
+(„Run workflow“).
 
-Der Workflow `.github/workflows/pages.yml` würde das bei jedem Push erledigen. Er liegt bereit, ist aber
-noch nicht im Repo, weil Workflow-Dateien die GitHub-Berechtigung `workflow` brauchen
-(`gh auth refresh -h github.com -s workflow`). Danach die Datei committen und unter Settings, Pages die
-Quelle auf „GitHub Actions“ stellen.
+Die Tests mit dem eigenen Flug (`fixtures/*.igc`) laufen nur lokal, die Datei ist nicht im Repo. Auf
+GitHub werden sie übersprungen.
 
 Die Fusszeile zeigt, welche Version online ist, zum Beispiel `v0.5.0, Build 20, 1a2b3c4, 05.11.2026`:
 Version aus `package.json`, Anzahl Commits, Commit-Kürzel und Build-Datum. Ein `+` hinter dem Commit

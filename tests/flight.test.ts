@@ -1,12 +1,14 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { analyzeTracks, parseTrack, scoreFlight } from '../src/core';
 
 const FILE = 'fixtures/2026-09-17-XTR-E820273A2ED6-01.IGC';
-const track = parseTrack(FILE, readFileSync(FILE, 'utf8'));
+// own flight, kept out of the repository: these tests run locally only
+const HAS = existsSync(FILE);
+const track = HAS ? parseTrack(FILE, readFileSync(FILE, 'utf8')) : (null as never);
 
-describe('Flug 17.09.2026 (XC Tracer, Kirgistan)', () => {
-  const a = analyzeTracks([track]);
+describe.skipIf(!HAS)('Flug 17.09.2026 (XC Tracer, Kirgistan)', () => {
+  const a = HAS ? analyzeTracks([track]) : (null as never);
   it('erkennt Paragliding ohne Hike-Anteil', () => {
     expect(a.sport).toBe('paragliding');
     expect(a.flight).toBeDefined();
@@ -35,8 +37,8 @@ describe('Flug 17.09.2026 (XC Tracer, Kirgistan)', () => {
   });
 });
 
-describe('Gleitstrecken und Thermik-Drift', () => {
-  const f = analyzeTracks([track]).flight!;
+describe.skipIf(!HAS)('Gleitstrecken und Thermik-Drift', () => {
+  const f = HAS ? analyzeTracks([track]).flight! : (null as never);
   it('liefert Gleitstrecken mit Gleitzahl', () => {
     const long = f.glides.filter((g) => g.distanceKm > 2);
     console.table(long.slice(0, 8).map((g) => ({ km: g.distanceKm.toFixed(1), loss: g.loss.toFixed(0), gz: g.ratio?.toFixed(1), air: g.airRatio?.toFixed(1), kmh: g.avgSpeedKmh.toFixed(0) })));
@@ -60,8 +62,8 @@ describe('Gleitstrecken und Thermik-Drift', () => {
   });
 });
 
-describe('Gleitstrecken und Thermiken', () => {
-  const f = analyzeTracks([track]).flight!;
+describe.skipIf(!HAS)('Gleitstrecken und Thermiken', () => {
+  const f = HAS ? analyzeTracks([track]).flight! : (null as never);
   it('überlappen sich nicht: Umzentrieren gehört zur Thermik', () => {
     for (const g of f.glides) for (const th of f.thermals) {
       expect(Math.min(g.end, th.end) - Math.max(g.start, th.start)).toBeLessThanOrEqual(0);

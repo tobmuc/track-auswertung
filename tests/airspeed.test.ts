@@ -5,7 +5,8 @@ import { analyzeTracks, parseTrack } from '../src/core';
 const FILE = 'fixtures/2026-09-17-XTR-E820273A2ED6-01.IGC';
 
 describe.skipIf(!existsSync(FILE))('Fahrt durch die Luft 17.09.2026', () => {
-  const f = analyzeTracks([parseTrack(FILE, readFileSync(FILE, 'utf8'))]).flight!;
+  // the body runs even when the block is skipped: read the file only if it is there
+  const f = existsSync(FILE) ? analyzeTracks([parseTrack(FILE, readFileSync(FILE, 'utf8'))]).flight! : (null as never);
   it('schätzt Trimmfahrt und beschleunigte Phasen plausibel', () => {
     const a = f.airspeed!;
     console.log('Trimm', a.trimKmh.toFixed(1), 'max20', a.max20sKmh.toFixed(1), 'ausgewertet', (a.evaluatedS / 60).toFixed(0), 'min', 'beschl.', (a.acceleratedS / 60).toFixed(0), 'min', a.phases.length, 'Phasen',
