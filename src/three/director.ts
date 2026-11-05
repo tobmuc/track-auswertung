@@ -60,7 +60,7 @@ export function makePlan(m: Model, o: DirectorOptions): Plan {
     let top = m.launchIdx;
     for (let i = m.launchIdx; i <= m.landingIdx; i++) if (m.alt[i] > m.alt[top]) top = i;
     mark(...around(top, 30), 2.5);
-    [...m.thermals].sort((a, b) => b.gain - a.gain).slice(0, 3).forEach((th) => mark(th.start, th.end, 2.2));
+    [...m.thermals].sort((a, b) => b.gain - a.gain).slice(0, 3).forEach((th) => mark(th.entry, th.end, 2.2));
   }
   for (let i = 1; i < n; i++) {
     const dt = (t[i] - t[i - 1]) / 1000;
@@ -228,7 +228,7 @@ export function makePlan(m: Model, o: DirectorOptions): Plan {
     });
   }
 
-  const thermalEnter = m.thermals.map((th) => frames.findIndex((fr) => fr.phase === 'play' && fr.fi >= th.start));
+  const thermalEnter = m.thermals.map((th) => frames.findIndex((fr) => fr.phase === 'play' && fr.fi >= th.entry));
   const thermalExit = m.thermals.map((th) => frames.findIndex((fr) => fr.phase === 'play' && fr.fi >= th.end));
   return { frames, fps: o.fps, thermalEnter, thermalExit };
 }

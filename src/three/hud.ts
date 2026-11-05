@@ -217,7 +217,7 @@ export function drawHud(g: CanvasRenderingContext2D, W: number, H: number, m: Mo
       let msg: { head: string; body: string; color: string } | null = null;
       // frame at which the current message started: it fades and slides in from there
       let since = -1;
-      const k = m.thermals.findIndex((th) => fi >= th.start && fi <= th.end);
+      const k = m.thermals.findIndex((th) => fi >= th.entry && fi <= th.end);
       if (k >= 0) {
         since = plan.thermalEnter[k];
         const th = m.thermals[k];

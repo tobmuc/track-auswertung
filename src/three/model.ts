@@ -3,6 +3,9 @@ import type { Glide, Thermal, Wind } from '../core';
 import type { Terrain } from './terrain';
 
 /** Track in the local 3D frame plus derived values the scene, director and HUD share */
+/** timeline mode code for circling (see app/colors.ts) */
+const CIRCLING = 4;
+
 export interface Model {
   res: ActivityResult;
   terrain: Terrain;
@@ -19,7 +22,8 @@ export interface Model {
   dist: Float64Array;
   isHike: Uint8Array;
   /** exitWobble: roll/pitch amplitude (rad) of the shake when leaving the thermal, larger in crosswind */
-  thermals: (Thermal & { idx: number; exitClimb: number; exitWobble: number })[];
+  /** entry: first timeline index of the circling that leads into the thermal (start is its lowest point) */
+  thermals: (Thermal & { idx: number; entry: number; exitClimb: number; exitWobble: number })[];
   glides: Glide[];
   winds: Wind[];
   launchIdx: number;
@@ -63,7 +67,18 @@ export function buildModel(res: ActivityResult, terrain: Terrain, precise?: Floa
       let j = t.end;
       while (j > t.start && tl.t[t.end] - tl.t[j] < 60_000) j--;
       const dt = (tl.t[t.end] - tl.t[j]) / 1000;
-      return { ...t, idx, exitClimb: dt > 0 ? (tl.alt[t.end] - tl.alt[j]) / dt : t.avgClimb };
+      // entry: where the track starts circling in this thermal. The thermal itself is measured from
+      // its lowest point, which often comes only after the first centring turns
+      let entry = t.start;
+      for (;;) {
+        while (entry > 0 && tl.mode[entry - 1] === CIRCLING) entry--;
+        // short straight bits between turns (re-centring) still belong to the same thermal
+        let k = entry - 1;
+        while (k > 0 && tl.mode[k] !== CIRCLING && tl.t[entry] - tl.t[k] < 20_000) k--;
+        if (k > 0 && tl.mode[k] === CIRCLING && tl.t[entry] - tl.t[k] < 20_000) entry = k;
+        else break;
+      }
+      return { ...t, idx, entry, exitClimb: dt > 0 ? (tl.alt[t.end] - tl.alt[j]) / dt : t.avgClimb };
     })
     .sort((a, b) => a.start - b.start);
 

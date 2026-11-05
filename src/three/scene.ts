@@ -106,7 +106,7 @@ const ease = (x: number) => {
 /**
  * Soft glowing column: brighter where the surface faces the camera, fading towards the silhouette,
  * the bottom and the top, so it reads as a volume of warm air rather than a hard tube.
- * uGrow (0..1) shows it from the bottom up to that share of its height.
+ * uGrow (0..1): share of the height drawn at full strength, the rest stays faint.
  */
 function softColumnMaterial(color: THREE.Color, opacity: number, y0: number, y1: number, fadeTop = 0.35, fadeBottom = 0.12): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
@@ -148,7 +148,8 @@ function softColumnMaterial(color: THREE.Color, opacity: number, y0: number, y1:
         float facing = abs(dot(normalize(vN), normalize(vV)));
         float a = uOpacity * pow(facing, 1.6);
         a *= (uFadeBot > 0.0 ? smoothstep(0.0, uFadeBot, h) : 1.0) * mix(1.0, uFadeTop, smoothstep(0.55, 1.0, h));
-        a *= 1.0 - smoothstep(uGrow - 0.1, uGrow, h);
+        // whole tube shows at once; up to the height the pilot has reached it glows at full strength
+        a *= mix(0.4, 1.0, 1.0 - smoothstep(uGrow - 0.06, uGrow, h));
         if (a < 0.003) discard;
         gl_FragColor = vec4(uColor, a);
         #include <colorspace_fragment>
@@ -742,7 +743,7 @@ export class FlightScene {
           link.computeLineDistances();
           g.add(link);
           lines.push(`${t('Basis')} ${Math.round(cb)} m`);
-          this.clouds.push({ ...cl, R, start: th.start, end: th.end, center: new THREE.Vector3(cx, cb * ex + R * 0.6, cz) });
+          this.clouds.push({ ...cl, R, start: th.entry, end: th.end, center: new THREE.Vector3(cx, cb * ex + R * 0.6, cz) });
         }
         const label = labelSprite(lines, `#${color.getHexString()}`);
         label.position.set(top.x, top.y + r * 2.2, top.z);
@@ -750,7 +751,7 @@ export class FlightScene {
         g.add(label);
         g.visible = false;
         this.scene.add(g);
-        this.thermalObjs.push({ group: g, label, start: th.start, end: th.end, top: th.topAlt, rim: rimMat, funnel: funnelMat, y0: rings[0].y, y1: rings[N].y });
+        this.thermalObjs.push({ group: g, label, start: th.entry, end: th.end, top: th.topAlt, rim: rimMat, funnel: funnelMat, y0: rings[0].y, y1: rings[N].y });
       }
     }
 
@@ -962,9 +963,9 @@ export class FlightScene {
     }
 
     for (const th of this.thermalObjs) {
-      // fades in once the pilot reaches the thermal; the funnel fills up to the highest point
-      // the pilot has climbed to so far, so it builds up with the climb
-      const a = all ? 1 : this.appear(th.start, fi, 1.0, video);
+      // appears as the track flies into the thermal (first turn); the funnel glows up to the
+      // highest point the pilot has climbed to so far
+      const a = all ? 1 : this.appear(th.start, fi, 0.35, video);
       th.group.visible = a > 0.001;
       if (th.group.visible) {
         fadeGroup(th.group, a);
