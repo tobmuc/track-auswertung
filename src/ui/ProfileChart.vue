@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch } from 'vue';
 import { colorBucket, type ColorMode } from '../app/colors';
-import { clock, m, kmh, signed } from '../app/format';
+import { clock, m, kmh, signed, timeSettings } from '../app/format';
 import type { ActivityResult } from '../app/types';
 import { i18n, locale, t } from '../app/i18n';
 
@@ -183,7 +183,7 @@ watch(() => props.hoverIdx, (i) => {
     ],
   };
 });
-watch(() => [props.colorMode, props.ground, i18n.lang], draw);
+watch(() => [props.colorMode, props.ground, i18n.lang, timeSettings.utc], draw);
 onMounted(() => {
   draw();
   ro = new ResizeObserver(draw);

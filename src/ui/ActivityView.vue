@@ -335,7 +335,10 @@ watch(() => props.id, load);
         <option value="FFVL">FFVL</option>
         <option value="XCLeague">XCLeague</option>
       </select>
-      <span class="muted tz">{{ t('Zeitzone') }} {{ tz }}</span>
+      <select v-model="F.timeSettings.utc" :aria-label="t('Zeitzone')" :title="t('Varios und IGC-Dateien zeichnen in UTC auf.')">
+        <option :value="false">{{ t('Ortszeit') }} ({{ tz }}, {{ F.utcOffset(tz, startTime ?? 0) }})</option>
+        <option :value="true">UTC</option>
+      </select>
       <a class="btn primary video-btn" :href="`#/a/${id}/3d`">{{ t('3D-Video erstellen') }}</a>
       <button @click="remove">{{ t('Löschen') }}</button>
     </div>

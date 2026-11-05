@@ -272,7 +272,7 @@ onMounted(() => {
   Object.values(boxes).forEach((b) => b && ro!.observe(b));
 });
 onUnmounted(() => ro?.disconnect());
-watch(() => [props.result, i18n.lang], () => requestAnimationFrame(render));
+watch(() => [props.result, i18n.lang, F.timeSettings.utc], () => requestAnimationFrame(render));
 
 /** Chart as PNG with title, flight name and a source line */
 function savePng(id: ChartId) {

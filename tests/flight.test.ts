@@ -59,3 +59,12 @@ describe('Gleitstrecken und Thermik-Drift', () => {
     expect(diffs[diffs.length >> 1]).toBeLessThan(8);
   });
 });
+
+describe('Gleitstrecken und Thermiken', () => {
+  const f = analyzeTracks([track]).flight!;
+  it('überlappen sich nicht: Umzentrieren gehört zur Thermik', () => {
+    for (const g of f.glides) for (const th of f.thermals) {
+      expect(Math.min(g.end, th.end) - Math.max(g.start, th.start)).toBeLessThanOrEqual(0);
+    }
+  });
+});

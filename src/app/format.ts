@@ -1,5 +1,33 @@
 import type { Sport } from '../core';
+import { reactive, watch } from 'vue';
 import { locale } from './i18n';
+
+/**
+ * Clock times in local time at the launch site (default) or in UTC, as varios and IGC files record them.
+ * Applies to the dashboard, the review and the video overlay.
+ */
+function loadUtc(): boolean {
+  try {
+    return localStorage.getItem('clock-utc') === '1';
+  } catch {
+    return false;
+  }
+}
+export const timeSettings = reactive({ utc: loadUtc() });
+watch(() => timeSettings.utc, (u) => {
+  try {
+    localStorage.setItem('clock-utc', u ? '1' : '0');
+  } catch {
+    /* private mode */
+  }
+});
+
+/** Offset of a time zone at a moment, e.g. "UTC+6" or "UTC+5:30" */
+export function utcOffset(timeZone: string, t: number): string {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: 'shortOffset' }).formatToParts(t);
+  const name = parts.find((p) => p.type === 'timeZoneName')?.value ?? 'GMT';
+  return name.replace('GMT', 'UTC').replace(/^UTC$/, 'UTC±0');
+}
 
 const nf = (d: number) => new Intl.NumberFormat(locale(), { minimumFractionDigits: d, maximumFractionDigits: d });
 
@@ -21,7 +49,7 @@ export function dur(s: number | null | undefined): string {
 }
 
 export function clock(t: number, timeZone: string): string {
-  return new Intl.DateTimeFormat(locale(), { hour: '2-digit', minute: '2-digit', timeZone }).format(t);
+  return new Intl.DateTimeFormat(locale(), { hour: '2-digit', minute: '2-digit', timeZone: timeSettings.utc ? 'UTC' : timeZone }).format(t);
 }
 
 export function dateLong(t: number | string, timeZone?: string): string {

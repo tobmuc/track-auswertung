@@ -201,6 +201,7 @@ function pick(f: Finding, whole: boolean) {
       <template v-if="improve.length">{{ fill(t('{n} Abschnitte mit Potenzial, zusammen grob {time}. {g} Stärken.'), { n: String(improve.length), time: F.dur(potentialS), g: String(good.length) }) }}</template>
       <template v-else>{{ t('Keine auffälligen Schwächen gefunden.') }}</template>
     </p>
+    <p class="tzline">{{ F.timeSettings.utc ? t('Zeiten in UTC.') : fill(t('Zeiten in Ortszeit ({tz}, {off}).'), { tz, off: F.utcOffset(tz, result.timeline.t[0]) }) }}</p>
     <p v-if="polarInfo" class="polar">
       <label>
         {{ t('Polare') }}
@@ -254,7 +255,8 @@ function pick(f: Finding, whole: boolean) {
 
 <style scoped>
 .review > h2 { padding-top: 18px; border-top: 1px solid var(--rule); margin-bottom: 6px; }
-.lead { margin: 0 0 10px; font-size: var(--fs-3); }
+.lead { margin: 0 0 4px; font-size: var(--fs-3); }
+.tzline { margin: 0 0 10px; font-size: var(--fs-1); color: var(--lichen); }
 .polar { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: 0 0 20px; font-size: var(--fs-1); }
 .polar label { display: flex; gap: 8px; align-items: center; color: var(--snow); }
 .polar select { max-width: 280px; }

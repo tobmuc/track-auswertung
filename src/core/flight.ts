@@ -201,6 +201,8 @@ export function analyzeFlight(pts: TrackPoint[], r: Range, s: Series, polarChoic
   // thermals: circling phases closer than 60 s merged, at least 30 m gained
   const thermals: Thermal[] = [];
   let group: Circling[] = [];
+  /** whole span of each thermal's circling group, including straight bits between its circling phases */
+  const thermalSpans: [number, number][] = [];
   const flush = () => {
     if (!group.length) return;
     const start = group[0].start;
@@ -215,6 +217,7 @@ export function analyzeFlight(pts: TrackPoint[], r: Range, s: Series, polarChoic
     const dur = s.s[hi] - s.s[lo];
     if (gain >= 30 && dur > 0) {
       for (const ci of circles) if (ci.i >= start && ci.i <= end) ci.thermal = thermals.length;
+      thermalSpans.push([start, end]);
       const ws = circleWinds.filter((w) => w.i >= start && w.i <= end);
       const core = centres.filter((c) => c.i >= start && c.i <= end).map(({ i: _, ...c }) => c);
       const mid = pts[r.start + ((lo + hi) >> 1)];
@@ -247,6 +250,8 @@ export function analyzeFlight(pts: TrackPoint[], r: Range, s: Series, polarChoic
   // per-point classification
   const inCircle = new Uint8Array(n);
   for (const c of circlings) inCircle.fill(1, c.start, c.end + 1);
+  const inThermal = new Uint8Array(n);
+  for (const [a, b] of thermalSpans) inThermal.fill(1, a, b + 1);
   const modeTime: Record<FlightMode, number> = { climb: 0, glide: 0, circling: 0, sink: 0 };
   let strongSink = 0;
   for (let i = 1; i < n; i++) {
@@ -263,7 +268,8 @@ export function analyzeFlight(pts: TrackPoint[], r: Range, s: Series, polarChoic
   const glides: Glide[] = [];
   let gs = -1;
   for (let i = 0; i <= n; i++) {
-    const straight = i < n && !inCircle[i];
+    // straight flight between thermals; re-centring inside a thermal is part of the thermal
+    const straight = i < n && !inCircle[i] && !inThermal[i];
     if (straight && gs < 0) gs = i;
     if (!straight && gs >= 0) {
       const ge = i - 1;
