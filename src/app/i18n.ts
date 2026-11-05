@@ -180,6 +180,7 @@ const EN: Record<string, string> = {
   "Wind aus dem Versatz der Kreismittelpunkte": "wind from the drift of the circle centres",
   "Versatz des Thermikkerns vom untersten zum obersten Kreis": "offset of the thermal core from the lowest to the highest circle",
   "Thermik & Kreisformen": "Thermals & circle shapes",
+  "Querlage": "Bank",
   "Der letzte Bart endete nur {diff} über dem Gelände am Schliesspunkt. Für die Strecke zurück hätte es mindestens einen weiteren Bart gebraucht.": "The last thermal ended only {diff} above the ground at the closing point. The way back would have needed at least one more thermal.",
   "Wendepunkte und Wertung": "Turnpoints and score",
   "Dreieck schliessen": "Closing the triangle",

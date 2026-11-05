@@ -757,7 +757,7 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.video-view { max-width: 1400px; margin: 0 auto; }
+.video-view { max-width: 1400px; margin: 0 auto; padding: 20px 20px 40px; }
 .head { margin-bottom: 16px; }
 .back { color: var(--muted); text-decoration: none; font-size: 14px; }
 .head h1 { font-size: 26px; margin-top: 4px; }
@@ -776,7 +776,7 @@ onUnmounted(() => {
 .result video { max-height: 60vh; max-width: 100%; border-radius: 8px; }
 .result.stale video { opacity: 0.55; }
 .stale-note { margin: 0; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: center; color: #ffca28; font-size: 14px; text-align: center; }
-.settings { padding: 16px; display: flex; flex-direction: column; gap: 14px; position: sticky; top: 16px; }
+.settings { padding: 16px; display: flex; flex-direction: column; gap: 14px; position: sticky; top: 72px; min-width: 0; }
 fieldset { border: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
 legend { font-size: var(--fs-2); font-weight: 700; font-variation-settings: var(--wide); color: var(--snow); margin-bottom: 8px; }
 label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; }

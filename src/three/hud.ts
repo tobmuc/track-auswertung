@@ -108,7 +108,10 @@ export function drawHud(g: CanvasRenderingContext2D, W: number, H: number, m: Mo
       [tr('Höhe'), `${num(alt)} m`],
       hike ? [tr('Steigen'), `${vario >= 0 ? '+' : '−'}${num(Math.abs(vario * 3600))} m/h`] : [tr('Vario'), `${vario >= 0 ? '+' : '−'}${num(Math.abs(vario), 1)} m/s`, varioCss(vario)],
       hike ? [tr('Speed'), `${num(speed, 1)} km/h`] : [tr('Über Grund'), `${num(agl)} m`, agl < 150 ? '#ff6b5e' : undefined],
-      [tr('Speed'), `${num(speed)} km/h`],
+      // while turning, the speed cell shows the bank angle the glider model is flying with
+      Math.abs(lerpAt(m.bank, fi)) >= 0.14 && !hike
+        ? [tr('Querlage'), `${num(Math.abs(lerpAt(m.bank, fi)) * (180 / Math.PI))}° ${lerpAt(m.bank, fi) > 0 ? tr('rechts') : tr('links')}`]
+        : [tr('Speed'), `${num(speed)} km/h`],
       [tr('Strecke'), `${num(lerpAt(m.dist, fi), 1)} km`],
     ];
     const shown = hike ? items.filter((_, k) => k !== 4) : items;

@@ -68,9 +68,9 @@ export function buildModel(res: ActivityResult, terrain: Terrain, precise?: Floa
     .sort((a, b) => a.start - b.start);
 
   const flightSeg = res.segments.find((s) => s.kind === 'flight');
-  const { hx, hz, bank } = attitude(tl.t, x, z, tl.speed);
-  const pitch = pitchSeries(tl.t, tl.vario, tl.speed);
   const winds = res.flight?.winds ?? [];
+  const { hx, hz, bank } = attitude(tl.t, x, z, tl.speed, windSeries(tl.t, winds, res.flight?.wind ?? null));
+  const pitch = pitchSeries(tl.t, tl.vario, tl.speed);
   const withWobble = thermals.map((th) => {
     // crosswind = wind component across the heading when leaving the thermal
     const w = th.wind ?? th.drift ?? windAtT(winds, tl.t[th.end]);
@@ -108,10 +108,37 @@ export function buildModel(res: ActivityResult, terrain: Terrain, precise?: Floa
 }
 
 /**
- * Heading from positions ±3 s around each point; bank from the coordinated-turn relation
- * tan(φ) = v·ω / g, smoothed over ±4 s and limited to ±55°.
+ * Wind per point in the local frame (x east, z south), m/s, as the air moves: mean of the circle winds
+ * within ±5 minutes, else the flight's mean wind. null when the flight has no wind estimate.
  */
-export function attitude(t: Float64Array, x: Float64Array, z: Float64Array, speedKmh: Float64Array) {
+export function windSeries(t: Float64Array, winds: Wind[], mean: Wind | null): { wx: Float32Array; wz: Float32Array } | null {
+  if (!winds.length && !mean) return null;
+  const n = t.length;
+  const wx = new Float32Array(n);
+  const wz = new Float32Array(n);
+  const vec = (w: Wind) => {
+    const to = ((w.fromDeg + 180) * Math.PI) / 180;
+    const v = w.speedKmh / 3.6;
+    return [Math.sin(to) * v, -Math.cos(to) * v] as const;
+  };
+  let a = 0, b = 0;
+  for (let i = 0; i < n; i++) {
+    while (a < winds.length && winds[a].t < t[i] - 300_000) a++;
+    while (b < winds.length && winds[b].t <= t[i] + 300_000) b++;
+    let sx = 0, sz = 0;
+    for (let k = a; k < b; k++) { const [vx, vz] = vec(winds[k]); sx += vx; sz += vz; }
+    if (b > a) { wx[i] = sx / (b - a); wz[i] = sz / (b - a); }
+    else if (mean) { const [vx, vz] = vec(mean); wx[i] = vx; wz[i] = vz; }
+  }
+  return { wx, wz };
+}
+
+/**
+ * Heading from positions ±3 s around each point; bank from the coordinated-turn relation
+ * tan(φ) = v·ω / g with v = airspeed: ground velocity minus wind. With ground speed instead, the bank
+ * would swing within every circle (fast downwind, slow upwind). Smoothed over ±4 s, limited to ±55°.
+ */
+export function attitude(t: Float64Array, x: Float64Array, z: Float64Array, speedKmh: Float64Array, wind?: { wx: Float32Array; wz: Float32Array } | null) {
   const n = t.length;
   const hx = new Float32Array(n);
   const hz = new Float32Array(n);
@@ -146,7 +173,13 @@ export function attitude(t: Float64Array, x: Float64Array, z: Float64Array, spee
     while (b < n - 1 && t[b + 1] - t[i] <= 2000) b++;
     const dt = (t[b] - t[a]) / 1000;
     const omega = dt > 0 ? (yaw[b] - yaw[a]) / dt : 0;
-    const v = speedKmh[i] / 3.6;
+    let v = speedKmh[i] / 3.6;
+    if (wind && dt > 0) {
+      // airspeed from the wind triangle over the same ±2 s
+      const gx = (x[b] - x[a]) / dt;
+      const gz = (z[b] - z[a]) / dt;
+      v = Math.hypot(gx - wind.wx[i], gz - wind.wz[i]);
+    }
     // compass-clockwise (right) turns decrease yaw = atan2(x, z) in this frame
     raw[i] = Math.max(-0.96, Math.min(0.96, Math.atan((v * -omega) / 9.81)));
   }
