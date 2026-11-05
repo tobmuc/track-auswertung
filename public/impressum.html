@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- keep this page out of search engines; robots.txt would only work at the domain root -->
+  <meta name="robots" content="noindex, nofollow, noarchive" />
+  <meta name="theme-color" content="#1b2421" />
+  <title>Impressum und Datenschutz · Track-Auswertung</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <style>
+    :root { --ground: #1b2421; --ground-2: #232e2a; --rule: #34423d; --snow: #f1f0ea; --lichen: #aab4ab; --lift: #f0c24b; --sky: #8ccbe6; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--ground); color: var(--snow); font: 15px/1.55 'Segoe UI', system-ui, sans-serif; }
+    header { display: flex; align-items: center; gap: 16px; height: 56px; padding: 0 20px; border-bottom: 1px solid var(--rule); }
+    header a { color: var(--snow); text-decoration: none; font-weight: 700; }
+    main { max-width: 720px; margin: 0 auto; padding: 32px 20px 64px; }
+    h1 { font-size: 32px; margin: 0 0 24px; letter-spacing: -0.01em; }
+    h2 { font-size: 18px; margin: 32px 0 8px; padding-top: 16px; border-top: 1px solid var(--rule); }
+    p, li { color: var(--snow); }
+    .muted { color: var(--lichen); }
+    a { color: var(--sky); }
+    button.mail { font: inherit; color: var(--sky); background: none; border: none; padding: 0; text-decoration: underline; cursor: pointer; }
+    :focus-visible { outline: 2px solid var(--sky); outline-offset: 2px; }
+    ul { padding-left: 20px; }
+  </style>
+</head>
+<body>
+  <header><a href="./">Track-Auswertung</a></header>
+  <main>
+    <h1>Impressum</h1>
+
+    <p>
+      Track-Auswertung ist ein privates, nicht kommerzielles Projekt.<br />
+      Autor und verantwortlich für den Inhalt: Tobias<br />
+      E-Mail: <span id="mail"><noscript>tobias.fliegt (at) gmail (punkt) com</noscript></span>
+    </p>
+    <p class="muted">Quellcode: <a href="https://github.com/tobmuc/track-auswertung">github.com/tobmuc/track-auswertung</a></p>
+
+    <h2>Haftung</h2>
+    <p>
+      Die Auswertungen sind Schätzungen aus GPS- und Höhendaten. Sie ersetzen keine Flugausbildung, keine
+      Wetterberatung und keine eigene Entscheidung in der Luft. Für Inhalte verlinkter Seiten sind deren
+      Betreiber verantwortlich.
+    </p>
+
+    <h1 style="margin-top:48px">Datenschutz</h1>
+
+    <h2>Deine Tracks</h2>
+    <p>
+      IGC- und GPX-Dateien, Auswertungen und Einstellungen werden nur im Speicher deines Browsers abgelegt
+      (IndexedDB). Sie werden nicht an diese Seite oder an Dritte übertragen. Löschen kannst du sie über die
+      App oder indem du die Websitedaten im Browser löschst.
+    </p>
+
+    <h2>Hosting</h2>
+    <p>
+      Die Seite liegt auf GitHub Pages (GitHub Inc., USA). Beim Aufruf verarbeitet GitHub technisch notwendige
+      Daten wie die IP-Adresse in Server-Protokollen. Details:
+      <a href="https://docs.github.com/de/site-policy/privacy-policies/github-general-privacy-statement">GitHub-Datenschutzerklärung</a>.
+    </p>
+
+    <h2>Karten, Höhen und Wetter</h2>
+    <p>Für Karte, Gelände und Wetter lädt dein Browser Daten direkt bei diesen Diensten. Dabei werden deine IP-Adresse und der Kartenausschnitt bzw. der Startort übertragen, nie der Track:</p>
+    <ul>
+      <li>Kartenkacheln: Esri (Satellit), EOX (Sentinel-2), OpenTopoMap, OpenStreetMap</li>
+      <li>Höhendaten: Terrain Tiles (Amazon Web Services); optional OpenTopography mit eigenem Schlüssel</li>
+      <li>Orte und Gipfel: Wikidata, OpenStreetMap (Overpass)</li>
+      <li>Temperatur und Taupunkt für die Wolkenbasis: Open-Meteo</li>
+    </ul>
+
+    <h2>Google Analytics</h2>
+    <p>
+      Nur wenn du im Banner zustimmst, lädt die Seite Google Analytics 4 (Google Ireland Ltd.). Erfasst
+      werden aufgerufene Ansichten (Startseite, Auswertung, 3D-Video), das Importieren eines Tracks und das
+      Erstellen eines Videos, ohne Inhalte der Tracks. Dafür setzt Google Cookies und überträgt Daten
+      gegebenenfalls in die USA. Rechtsgrundlage ist deine Einwilligung (Art. 6 Abs. 1 lit. a DSGVO). Du kannst
+      sie jederzeit über „Statistik-Einstellungen“ in der Fusszeile der App widerrufen; die Cookies werden dann
+      gelöscht.
+    </p>
+
+    <h2>Deine Rechte</h2>
+    <p>
+      Du hast das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung und Widerspruch
+      sowie auf Beschwerde bei einer Datenschutz-Aufsichtsbehörde. Anfragen gehen an die oben genannte E-Mail.
+    </p>
+  </main>
+  <script>
+    // The address is assembled only in the browser, so simple address harvesters that read the
+    // HTML do not find it. Anything that runs JavaScript (or reads the noscript text) still can.
+    (function () {
+      var parts = ['tobias', 'fliegt'], host = ['gmail', 'com'];
+      var el = document.getElementById('mail');
+      var b = document.createElement('button');
+      b.className = 'mail';
+      b.type = 'button';
+      b.textContent = parts.join('.') + '@' + host.join('.');
+      b.addEventListener('click', function () { location.href = 'mai' + 'lto:' + b.textContent; });
+      el.appendChild(b);
+    })();
+  </script>
+</body>
+</html>

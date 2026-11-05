@@ -63,6 +63,16 @@ Profil zu sehen. Erkannt werden derzeit:
 - auf der Habenseite der stärkste Bart, der beste Gleitflug, die schnellste halbe Stunde, schnelles
   Zentrieren und Fliegen nach Sollfahrt
 
+Für das Gleiten nutzt die Bewertung die Polare des Schirms. Die Polaren stammen aus der Auswertung von
+86'000 XContest-Flügen im Wallis (Korner 2026, 73 Schirmtypen und Klassenmittel). Der Schirm wird aus dem
+Namen im IGC erkannt oder lässt sich wählen. Daraus rechnet die App für jede Gleitstrecke die Sollfahrt
+nach MacCready mit Wind, Luftmasse und dem Steigen des nächsten Barts und vergleicht das Sinken in
+Trimmfahrt mit der Polare.
+
+Bei Dreiecken nach XContest zeigt die Bewertung, was zum geschlossenen oder zum FAI-Dreieck fehlte und
+wie viele Punkte das gebracht hätte. Für das Schliessen prüft sie mit den Höhendaten, ob die Höhe des
+letzten Barts für den Weg zurück gereicht hätte.
+
 Die Zeitangaben sind grobe Schätzungen. Gründe wie tiefe Lage, Luftraum oder eine geplante Route kann
 die Auswertung nicht sehen.
 

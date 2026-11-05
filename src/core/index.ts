@@ -8,3 +8,4 @@ export * from './airspeed';
 export * from './review';
 export * from './polar';
 export * from './polars';
+export * from './scorePotential';

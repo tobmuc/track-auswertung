@@ -21,6 +21,7 @@ const fileInput = ref<HTMLInputElement>();
 /** flight list in the top bar */
 const menuOpen = ref(false);
 const BUILD = __BUILD__;
+const BASE = import.meta.env.BASE_URL;
 const buildDate = new Intl.DateTimeFormat('de-CH', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(BUILD.date));
 const buildTitle = `Version ${BUILD.version}, Build ${BUILD.build}, Commit ${BUILD.commit}, ${new Date(BUILD.date).toLocaleString()}`;
 const demoVideo = `${import.meta.env.BASE_URL}demo/demo-flug.mp4`;
@@ -190,6 +191,7 @@ function facts(a: ActivityRecord) {
     <footer class="foot">
       <span>{{ t('Alle Daten bleiben lokal im Browser (IndexedDB).') }}</span>
       <button v-if="analyticsAvailable" class="link" @click="resetConsent">{{ t('Statistik-Einstellungen') }}</button>
+      <a class="legal" :href="`${BASE}impressum.html`">{{ t('Impressum und Datenschutz') }}</a>
       <a class="version" :title="buildTitle" :href="`https://github.com/tobmuc/track-auswertung/commit/${BUILD.commit.replace('+', '')}`" target="_blank" rel="noopener">v{{ BUILD.version }}, Build {{ BUILD.build }}, {{ BUILD.commit }}, {{ buildDate }}</a>
     </footer>
 
@@ -273,6 +275,7 @@ main { flex: 1; min-width: 0; }
   display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; padding: 18px 20px 24px;
   border-top: 1px solid var(--rule); font-size: var(--fs-1); color: var(--lichen);
 }
+.legal { color: var(--lichen); }
 .version { color: var(--lichen); text-decoration: none; margin-left: auto; }
 .version:hover { text-decoration: underline; }
 button.link { background: none; border: none; padding: 0; color: var(--lichen); text-decoration: underline; cursor: pointer; font-size: var(--fs-1); min-height: 0; }

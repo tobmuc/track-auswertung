@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 import tzlookup from 'tz-lookup';
-import { analyzeTracks, parseTrack, scoreAll } from '../core';
+import { analyzeTracks, parseTrack, scoreAll, xcPotential } from '../core';
 import { breakMask, hikeModes } from '../core/hike';
 import type { PolarChoice, RuleSet, Sport } from '../core';
 import type { ActivityResult, Timeline, WorkerRequest } from './types';
@@ -103,5 +103,6 @@ function analyze(files: { name: string; text: string }[], sport: Sport | undefin
     pilot: analysis.segments.find((s) => s.track.pilot)?.track.pilot,
     timeline: tl,
     score,
+    xcPotential: xcPotential(score, rules),
   };
 }

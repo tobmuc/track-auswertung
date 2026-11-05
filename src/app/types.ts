@@ -1,4 +1,4 @@
-import type { FlightStats, Glide, HikeStats, PolarChoice, RuleSet, ScoreSet, Sport, Thermal } from '../core';
+import type { FlightStats, Glide, HikeStats, PolarChoice, RuleSet, ScoreSet, Sport, Thermal, XcPotential } from '../core';
 
 export interface Timeline {
   t: Float64Array;
@@ -32,6 +32,8 @@ export interface ActivityResult {
   pilot?: string;
   timeline: Timeline;
   score?: ScoreSet;
+  /** what the triangle lacked for a better XContest rating */
+  xcPotential?: XcPotential[];
 }
 
 export interface WorkerRequest {

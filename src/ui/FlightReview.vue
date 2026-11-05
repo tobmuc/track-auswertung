@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, watchEffect } from 'vue';
+import { groundProfile } from '../app/ground';
 import * as F from '../app/format';
 import { t } from '../app/i18n';
-import type { ActivityResult } from '../app/types';
-import { POLARS, type Finding } from '../core';
+import type { ActivityResult, Timeline } from '../app/types';
+import { POLARS, type Finding, type XcPotential } from '../core';
+import { compass } from '../core/geo';
 
 const props = defineProps<{ result: ActivityResult; polarId: string }>();
 const emit = defineEmits<{ select: [idx: number]; polar: [id: string] }>();
@@ -94,6 +96,98 @@ const good = computed(() => (review.value?.good ?? []).map((f) => ({ f, ...descr
 const improve = computed(() => (review.value?.improve ?? []).map((f) => ({ f, ...describe(f) })));
 const potentialS = computed(() => (review.value?.improve ?? []).reduce((a, f) => a + (f.v.lostS ?? f.v.savedS ?? 0), 0));
 
+// ---------- turnpoints and rating: what the triangle lacked, checked against height and terrain
+interface CloseCheck {
+  /** last thermal before the end of the track */
+  topM: number;
+  topClock: string;
+  /** straight line from there to the closing point */
+  distKm: number;
+  groundTargetM: number;
+  maxGroundM: number;
+  /** distance the height would have carried at the flight's average glide, arriving 200 m above ground */
+  reachKm: number;
+  glide: number;
+  bearing: string;
+}
+const xc = computed(() => props.result.xcPotential ?? []);
+const closeCheck = ref<CloseCheck | null>(null);
+
+/** Bearing from a to b in degrees */
+function bearingDeg(a: { lat: number; lon: number }, b: { lat: number; lon: number }) {
+  const r = Math.PI / 180;
+  const y = Math.sin((b.lon - a.lon) * r) * Math.cos(b.lat * r);
+  const x = Math.cos(a.lat * r) * Math.sin(b.lat * r) - Math.sin(a.lat * r) * Math.cos(b.lat * r) * Math.cos((b.lon - a.lon) * r);
+  return ((Math.atan2(y, x) / r) + 360) % 360;
+}
+
+watchEffect(async () => {
+  const close = xc.value.find((p) => p.kind === 'close');
+  const res = props.result;
+  const glide = res.flight?.avgGlideRatio;
+  closeCheck.value = null;
+  if (!close?.out || !close.target || !glide) return;
+  const tl = res.timeline;
+  // last thermal that ended before the track reached the closing-out point
+  const ths = res.segments.flatMap((sg) => sg.thermals).filter((th) => th.end <= close.out!.idx);
+  const last = ths[ths.length - 1];
+  if (!last) return;
+  const from = { lat: tl.lat[last.end], lon: tl.lon[last.end] };
+  const to = close.target;
+  // ground along the straight line, 60 samples
+  const N = 60;
+  const line = { t: new Float64Array(N), lat: new Float64Array(N), lon: new Float64Array(N) } as unknown as Timeline;
+  for (let i = 0; i < N; i++) {
+    const f = i / (N - 1);
+    line.lat[i] = from.lat + (to.lat - from.lat) * f;
+    line.lon[i] = from.lon + (to.lon - from.lon) * f;
+  }
+  try {
+    const g = await groundProfile(`xc-close:${from.lat.toFixed(4)},${from.lon.toFixed(4)}>${to.lat.toFixed(4)},${to.lon.toFixed(4)}`, line);
+    const ground = [...g.ground].filter((v) => v === v);
+    if (!ground.length) return;
+    const km = Math.hypot((to.lat - from.lat) * 111.32, (to.lon - from.lon) * 111.32 * Math.cos((from.lat * Math.PI) / 180));
+    const groundTarget = g.ground[N - 1];
+    closeCheck.value = {
+      topM: last.topAlt,
+      topClock: F.clock(tl.t[last.end], tz.value),
+      distKm: km,
+      groundTargetM: groundTarget,
+      maxGroundM: Math.max(...ground),
+      reachKm: Math.max(0, ((last.topAlt - groundTarget - 200) * glide) / 1000),
+      glide,
+      bearing: compass(bearingDeg(from, to)),
+    };
+  } catch {
+    closeCheck.value = null;
+  }
+});
+
+function describeXc(p: XcPotential): { title: string; text: string } {
+  const pts = (v: number) => `${F.num(v, 1)} P`;
+  if (p.kind === 'close') {
+    let text = fill(t('Die Lücke zum Start des Dreiecks war {gap} lang, erlaubt sind 5 % des Umfangs. Es fehlten {miss}. Geschlossen zählt das Dreieck ×{m2} statt ×{m1}: etwa {new} statt {now}.'), {
+      gap: F.km(p.gapKm ?? 0, 1), miss: F.km(p.missingKm, 1), m1: String(p.nowMultiplier), m2: String(p.newMultiplier), new: pts(p.newPoints), now: pts(p.nowPoints) });
+    const c = closeCheck.value;
+    if (c) {
+      text += ' ' + fill(t('Vom letzten Bart (Top {top} um {clock}) bis zum Schliesspunkt waren es {dist} Richtung {dir}; das Gelände dort liegt auf {ground}, unterwegs bis {max}. Mit deiner mittleren Gleitzahl {glide} hätte die Höhe für {reach} gereicht, mit 200 m Reserve über Grund.'), {
+        top: F.m(c.topM), clock: c.topClock, dist: F.km(c.distKm, 1), dir: c.bearing, ground: F.m(c.groundTargetM), max: F.m(c.maxGroundM), glide: F.glide(c.glide), reach: F.km(c.reachKm, 1) });
+      text += ' ' + (c.reachKm >= c.distKm
+        ? t('Die Höhe hätte gereicht: Der Schlussgleiter hätte Richtung Startplatz gehen können.')
+        : c.reachKm < 0.5
+          ? fill(t('Der letzte Bart endete nur {diff} über dem Gelände am Schliesspunkt. Für die Strecke zurück hätte es mindestens einen weiteren Bart gebraucht.'), { diff: F.m(c.topM - c.groundTargetM) })
+          : fill(t('Es fehlte also noch ein Bart, etwa {more} vor dem Ziel.'), { more: F.km(c.distKm - c.reachKm, 1) }));
+    }
+    return { title: t('Dreieck schliessen'), text };
+  }
+  return {
+    title: t('FAI-Dreieck'),
+    text: fill(t('Der kürzeste Schenkel hatte {share} % des Umfangs, nötig sind 28 %. Mit {miss} mehr auf diesem Schenkel wäre es ein FAI-Dreieck mit ×{m2}: etwa {new} statt {now}.'), {
+      share: String(Math.round((p.shortestShare ?? 0) * 100)), miss: F.km(p.missingKm, 1), m2: String(p.newMultiplier), new: pts(p.newPoints), now: pts(p.nowPoints) }),
+  };
+}
+const xcItems = computed(() => xc.value.map((p) => ({ p, ...describeXc(p) })));
+
 function pick(f: Finding, whole: boolean) {
   if (whole) return;
   emit('select', offset.value + ((f.start + f.end) >> 1));
@@ -145,6 +239,15 @@ function pick(f: Finding, whole: boolean) {
         </ul>
       </div>
     </div>
+    <div v-if="xcItems.length" class="xc">
+      <h3>{{ t('Wendepunkte und Wertung') }}</h3>
+      <ul>
+        <li v-for="x in xcItems" :key="x.p.kind + x.p.from" class="xc-item">
+          <strong>{{ x.title }}</strong>
+          <span>{{ x.text }}</span>
+        </li>
+      </ul>
+    </div>
     <p class="note">{{ t('Grundlage sind nur die Messwerte des Tracks: Steigen pro Vollkreis, Fahrt aus dem Winddreieck, Tagesschnitt des Steigens. Die Zeitangaben sind grobe Schätzungen. Gründe wie Gelände, Luftraum oder eine geplante Route sieht die Auswertung nicht. Ein Klick zeigt den Abschnitt auf Karte und Profil.') }}</p>
   </section>
 </template>
@@ -169,6 +272,10 @@ li { border-top: 1px solid var(--rule); }
 .item:disabled { cursor: default; opacity: 1; }
 .item span { color: var(--lichen); font-size: 14px; }
 .none { padding: 10px 0; color: var(--lichen); }
+.xc { margin-top: 28px; }
+.xc h3 { color: var(--snow); }
+.xc-item { display: flex; flex-direction: column; gap: 3px; padding: 10px 0; max-width: 90ch; }
+.xc-item span { color: var(--lichen); font-size: 14px; }
 .note { font-size: var(--fs-1); color: var(--lichen); margin: 14px 0 0; max-width: 90ch; }
 @media (max-width: 800px) { .cols { grid-template-columns: 1fr; } }
 </style>
