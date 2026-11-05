@@ -6,7 +6,7 @@ import { onMounted, onUnmounted, ref, watch } from 'vue';
 import { colorBucket, type ColorMode } from '../app/colors';
 import type { ActivityResult } from '../app/types';
 import type { XcScore } from '../core';
-import { t } from '../app/i18n';
+import { i18n, t } from '../app/i18n';
 import { loadOsmLines, RELIEF_STOPS, type OsmLine } from '../app/relief';
 
 // in the bundled build maplibre would look for its worker next to our own chunk, where it is not;
@@ -18,6 +18,8 @@ const props = defineProps<{
   colorMode: ColorMode;
   hoverIdx: number | null;
   score?: XcScore;
+  /** space kept free at the bottom when fitting the track (text over the map), px */
+  padBottom?: number;
 }>();
 const emit = defineEmits<{ hover: [idx: number | null] }>();
 
@@ -236,13 +238,20 @@ function fit() {
     w = Math.min(w, tl.lon[i]); e = Math.max(e, tl.lon[i]);
     s = Math.min(s, tl.lat[i]); nn = Math.max(nn, tl.lat[i]);
   }
-  map?.fitBounds([[w, s], [e, nn]], { padding: 40, duration: 0 });
+  map?.fitBounds([[w, s], [e, nn]], { padding: { top: 60, left: 40, right: 60, bottom: 40 + (props.padBottom ?? 0) }, duration: 0 });
 }
 
 onMounted(() => {
-  map = new maplibregl.Map({ container: el.value!, style: style(), attributionControl: { compact: true }, maxPitch: 80 });
+  map = new maplibregl.Map({ container: el.value!, style: style(), attributionControl: { compact: true }, maxPitch: 80,
+    // the map spans the page: the wheel scrolls the page, Ctrl+wheel or two fingers move the map
+    cooperativeGestures: true,
+    locale: i18n.lang === 'de' ? {
+      'CooperativeGesturesHandler.WindowsHelpText': 'Strg + Mausrad zoomt die Karte',
+      'CooperativeGesturesHandler.MacHelpText': '⌘ + Mausrad zoomt die Karte',
+      'CooperativeGesturesHandler.MobileHelpText': 'Mit zwei Fingern die Karte bewegen',
+    } : undefined });
   map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
-  map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
+  map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'top-right');
   fit();
   map.on('load', () => {
     if (!map) return;
@@ -324,11 +333,16 @@ function applyTerrain(on: boolean) {
 .wrap { position: relative; }
 .map { height: 460px; border-radius: var(--radius) var(--radius) 0 0; overflow: hidden; }
 .controls { position: absolute; top: 10px; left: 10px; right: 60px; display: flex; flex-wrap: wrap; gap: 6px; }
-.controls button { padding: 4px 10px; font-size: 13px; background: rgba(13, 17, 23, .85); }
-.controls button.active { background: var(--accent); }
+.controls button { padding: 4px 10px; font-size: 13px; background: rgba(27, 36, 33, .82); border-color: rgba(241, 240, 234, .28); backdrop-filter: blur(4px); }
+.controls button.active { background: var(--snow); color: var(--ground); border-color: var(--snow); }
 :global(.hover-dot) {
   width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 3px solid var(--accent);
   box-shadow: 0 0 0 3px rgba(0, 0, 0, .35);
 }
-@media (max-width: 800px) { .map { height: 340px; } }
+@media (max-width: 800px) {
+  .map { height: 340px; }
+  /* one scrollable row of map buttons, so they do not cover the map */
+  .controls { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; right: 52px; }
+  .controls button { flex: 0 0 auto; }
+}
 </style>

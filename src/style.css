@@ -1,40 +1,75 @@
+/*
+ * "Terrain first": the map and the 3D terrain carry the page, the interface recedes.
+ * Colours come from the mountain: shaded forest as the ground, snow for text, lichen for secondary
+ * text, sun/thermal yellow for the one main action, sky blue for links and focus.
+ * See DESIGN.md for the rules behind it.
+ */
 :root {
-  --bg: #0d1117;
-  --panel: #151b23;
-  --panel-2: #1c2430;
-  --line: #2a3441;
-  /* borders of form controls: ≥ 3:1 against the panels (WCAG 1.4.11) */
-  --control-line: #5d6b7c;
-  --text: #e6edf3;
-  --muted: #8b98a8;
-  --accent: #ff8a3d;
-  --accent-2: #4fc3f7;
-  --hike: #8bc34a;
-  --flight: #ff8a3d;
-  --radius: 12px;
-  font-family: Inter, 'Segoe UI', system-ui, sans-serif;
-  color: var(--text);
-  background: var(--bg);
+  --ground: #1b2421;
+  --ground-2: #232e2a;
+  --ground-3: #2b3833;
+  --rule: #34423d;
+  --snow: #f1f0ea;
+  --lichen: #aab4ab;
+  --lift: #f0c24b;
+  --sky: #8ccbe6;
+  /* borders of form controls: ≥ 3:1 against ground and ground-2 (WCAG 1.4.11) */
+  --control-line: #6f8279;
+
+  /* older names, still used by components */
+  --bg: var(--ground);
+  --panel: var(--ground-2);
+  --panel-2: var(--ground-3);
+  --line: var(--rule);
+  --text: var(--snow);
+  --muted: var(--lichen);
+  --accent: var(--lift);
+  --accent-2: var(--sky);
+  --hike: #9ccc65;
+  --flight: var(--lift);
+  --radius: 6px;
+
+  /* type scale (Archivo): 13 / 15 / 18 / 24 / 40 */
+  --fs-1: 13px;
+  --fs-2: 15px;
+  --fs-3: 18px;
+  --fs-4: 24px;
+  --fs-5: clamp(30px, 4.4vw, 44px);
+  --wide: 'wdth' 118;
+
+  font-family: 'Archivo Variable', 'Segoe UI', system-ui, sans-serif;
+  font-size: var(--fs-2);
+  line-height: 1.45;
+  color: var(--snow);
+  background: var(--ground);
+  font-variant-numeric: tabular-nums;
 }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); }
+body { margin: 0; background: var(--ground); }
 button, select, input { font: inherit; color: inherit; }
 button, .btn {
-  background: var(--panel-2); border: 1px solid var(--control-line); border-radius: 8px;
-  padding: 6px 12px; cursor: pointer; color: var(--text); font: inherit; line-height: 1.3;
+  background: var(--ground-2); border: 1px solid var(--control-line); border-radius: 4px;
+  padding: 6px 12px; cursor: pointer; color: var(--snow); font: inherit; line-height: 1.3;
 }
-.btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
-button:hover, .btn:hover { border-color: var(--text); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; }
+button:hover, .btn:hover { border-color: var(--snow); }
 button:disabled { opacity: .55; cursor: not-allowed; }
-button.primary, .btn.primary { background: var(--accent); border-color: var(--accent); color: #1a0d03; font-weight: 600; }
-button.primary:hover, .btn.primary:hover { filter: brightness(1.08); }
-button.active { background: var(--accent); border-color: var(--accent); color: #1a0d03; }
+button.primary, .btn.primary { background: var(--lift); border-color: var(--lift); color: var(--ground); font-weight: 650; }
+button.primary:hover, .btn.primary:hover { background: #f6d272; border-color: #f6d272; }
+button.active { background: var(--snow); border-color: var(--snow); color: var(--ground); }
 select, input[type=text] {
-  background: var(--panel-2); border: 1px solid var(--control-line); border-radius: 8px; padding: 6px 10px;
+  background: var(--ground-2); border: 1px solid var(--control-line); border-radius: 4px; padding: 6px 10px;
 }
 /* visible keyboard focus everywhere (WCAG 2.4.7), not on mouse clicks */
-:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
-a { color: var(--accent-2); }
+:focus-visible { outline: 2px solid var(--sky); outline-offset: 2px; }
+a { color: var(--sky); }
+/* sections are separated by space and a hairline, not by boxes */
+.panel { background: var(--ground-2); border: 1px solid var(--rule); border-radius: var(--radius); }
+.muted { color: var(--lichen); }
+/* small labels in sentence case; capitals and letter-spacing are reserved for nothing */
+.label { font-size: var(--fs-1); color: var(--lichen); }
+h1, h2, h3 { margin: 0; font-weight: 700; font-variation-settings: var(--wide); letter-spacing: -0.01em; }
+h2 { font-size: var(--fs-4); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 /* finger-sized controls on touch screens (WCAG 2.5.8 / 44 px recommendation) */
 @media (pointer: coarse) {
@@ -42,7 +77,3 @@ a { color: var(--accent-2); }
   input[type=checkbox] { width: 20px; height: 20px; }
 }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
-.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
-.muted { color: var(--muted); }
-.label { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
-h1, h2, h3 { margin: 0; }

@@ -97,7 +97,7 @@ const places = computed(() => {
   const parts: string[] = [];
   if (r.hike) parts.push(`${t('Aufstieg')} ${F.dur(r.hike.durationS)}`);
   if (r.flight) parts.push(`${t('Flug')} ${F.clock(r.flight.launchTime, tz.value)}–${F.clock(r.flight.landingTime, tz.value)}`);
-  return parts.join(' · ');
+  return parts.join(', ');
 });
 
 const kpis = computed(() => {
@@ -122,6 +122,15 @@ const kpis = computed(() => {
 });
 
 type Group = { title: string; rows: [string, string][] };
+
+/** title and readout cover the lower part of the map */
+const heroPad = window.matchMedia('(max-width: 800px)').matches ? 170 : 230;
+
+/** "80.80 km" → ["80.80", "km"]; values without a trailing unit stay whole ("4h 17m") */
+function splitUnit(v: string): [string, string] {
+  const m = /^(.*\d)\s+([^\d\s]+)$/.exec(v);
+  return m ? [m[1], m[2]] : [v, ''];
+}
 
 const hikeGroups = computed<Group[]>(() => {
   const h = hike.value;
@@ -182,7 +191,7 @@ const flightGroups = computed<Group[]>(() => {
     {
       title: t('Speed & Gleiten'),
       rows: [[t('Ø Speed'), F.kmh(f.avgSpeedKmh)], [t('Max. Speed'), F.kmh(f.maxSpeedKmh)], [t('Ø Gleitzahl (Gleitphasen)'), F.glide(f.avgGlideRatio)], [t('Beste Gleitzahl (60 s)'), F.glide(f.bestGlide60s)],
-        [t('Bestes Gleiten'), best ? `${F.glide(best.ratio)} · ${F.km(best.distanceKm, 1)}` : '–']],
+        [t('Bestes Gleiten'), best ? `${F.glide(best.ratio)}, ${F.km(best.distanceKm, 1)}` : '–']],
     },
     {
       title: t('Vario'),
@@ -208,7 +217,7 @@ const flightGroups = computed<Group[]>(() => {
             [t('Trimmfahrt (geschätzt)'), F.kmh(f.airspeed.trimKmh, 0)],
             [t('Max. Fahrt (20 s)'), F.kmh(f.airspeed.max20sKmh, 0)],
             [t('Beschleunigt'), `${F.dur(f.airspeed.acceleratedS)} (${F.pct(f.airspeed.acceleratedS, f.airspeed.evaluatedS)} ${t('des Geradeausflugs')})`],
-            [t('Beschleunigte Phasen'), `${f.airspeed.phases.length} · ${t('längste')} ${F.dur(Math.max(0, ...f.airspeed.phases.map((p) => p.durationS)))}`],
+            [t('Beschleunigte Phasen'), `${f.airspeed.phases.length}, ${t('längste')} ${F.dur(Math.max(0, ...f.airspeed.phases.map((p) => p.durationS)))}`],
             [t('Beschleunigt bei Gegenwind'), f.airspeed.accelShareHeadwind == null ? '–' : `${Math.round(f.airspeed.accelShareHeadwind * 100)} %`],
             [t('Beschleunigt bei Rückenwind'), f.airspeed.accelShareTailwind == null ? '–' : `${Math.round(f.airspeed.accelShareTailwind * 100)} %`],
           ] as [string, string][],
@@ -246,7 +255,7 @@ const thermalCircles = computed(() => {
 });
 function circleCell(th: object) {
   const c = thermalCircles.value.get(th);
-  return c ? `${F.num(2 * c.meanRadiusM)} m · ${F.num(c.meanBankDeg)}°` : '–';
+  return c ? `${F.num(2 * c.meanRadiusM)} m, ${F.num(c.meanBankDeg)}°` : '–';
 }
 function centredCell(th: object) {
   const c = thermalCircles.value.get(th);
@@ -291,52 +300,51 @@ watch(() => props.id, load);
   <div v-if="loading" class="state">{{ t('Analysiere Track … (XC-Optimierung kann einige Sekunden dauern)') }}</div>
   <div v-else-if="error" class="state error" role="alert">{{ error }}<br /><a class="btn back" href="#/">{{ t('Zur Startseite') }}</a></div>
   <article v-else-if="rec && res" class="activity">
-    <header class="head">
-      <div class="title">
+    <section class="hero">
+      <TrackMap :result="res" :color-mode="colorMode" :hover-idx="hoverIdx" :score="selectedScore" :pad-bottom="heroPad" @hover="hoverIdx = $event" />
+      <div class="hero-text">
         <h1 class="sr-only">{{ rec.title }}</h1>
         <input class="title-input" :aria-label="t('Titel der Aktivität')" :value="rec.title" @change="update({ title: ($event.target as HTMLInputElement).value })" />
-        <div class="meta">
-          <select :aria-label="t('Sportart')" :value="rec.sport ?? ''" @change="update({ sport: (($event.target as HTMLSelectElement).value || undefined) as Sport | undefined })">
-            <option value="">{{ t('Automatisch') }} ({{ t(F.SPORT_LABEL[res.sport]) }})</option>
-            <option v-for="(l, k) in F.SPORT_LABEL" :key="k" :value="k">{{ t(l) }}</option>
-          </select>
-          <span>{{ startTime ? F.dateLong(startTime, tz) : '' }}</span>
-          <span class="muted">{{ places }}</span>
-          <span v-if="res.glider" class="muted">· {{ res.glider }}</span>
-          <span class="muted">· {{ tz }}</span>
-        </div>
-      </div>
-      <div class="actions">
-        <select v-if="res.flight" :value="rec.rules" :title="t('Wertungsregeln')" :aria-label="t('Wertungsregeln')" @change="update({ rules: ($event.target as HTMLSelectElement).value as RuleSet })">
-          <option value="XContest">XContest</option>
-          <option value="FAI">FAI</option>
-          <option value="FFVL">FFVL</option>
-          <option value="XCLeague">XCLeague</option>
-        </select>
-        <a class="btn primary" :href="`#/a/${id}/3d`">🎬 {{ t('3D-Video') }}</a>
-        <button @click="remove">{{ t('Löschen') }}</button>
-      </div>
-    </header>
-
-    <section class="kpis">
-      <div v-for="[l, v] in kpis" :key="l" class="kpi panel">
-        <div class="label">{{ l }}</div>
-        <div class="value">{{ v }}</div>
+        <p class="hero-meta">
+          {{ startTime ? F.dateLong(startTime, tz) : '' }}<template v-if="places">, {{ places }}</template><template v-if="res.glider">, {{ res.glider }}</template>
+        </p>
+        <dl class="readout">
+          <div v-for="[l, v] in kpis" :key="l">
+            <dt>{{ l }}</dt>
+            <dd>{{ splitUnit(v)[0] }}<small v-if="splitUnit(v)[1]">{{ splitUnit(v)[1] }}</small></dd>
+          </div>
+        </dl>
       </div>
     </section>
 
-    <section class="panel mapcard">
-      <TrackMap :result="res" :color-mode="colorMode" :hover-idx="hoverIdx" :score="selectedScore" @hover="hoverIdx = $event" />
+    <div class="tools wrap">
+      <select :aria-label="t('Sportart')" :value="rec.sport ?? ''" @change="update({ sport: (($event.target as HTMLSelectElement).value || undefined) as Sport | undefined })">
+        <option value="">{{ t('Automatisch') }} ({{ t(F.SPORT_LABEL[res.sport]) }})</option>
+        <option v-for="(l, k) in F.SPORT_LABEL" :key="k" :value="k">{{ t(l) }}</option>
+      </select>
+      <select v-if="res.flight" :value="rec.rules" :title="t('Wertungsregeln')" :aria-label="t('Wertungsregeln')" @change="update({ rules: ($event.target as HTMLSelectElement).value as RuleSet })">
+        <option value="XContest">XContest</option>
+        <option value="FAI">FAI</option>
+        <option value="FFVL">FFVL</option>
+        <option value="XCLeague">XCLeague</option>
+      </select>
+      <span class="muted tz">{{ t('Zeitzone') }} {{ tz }}</span>
+      <a class="btn primary video-btn" :href="`#/a/${id}/3d`">{{ t('3D-Video erstellen') }}</a>
+      <button @click="remove">{{ t('Löschen') }}</button>
+    </div>
+
+    <section class="wrap profile">
       <div class="profile-head">
-        <div class="seg">
-          <button :class="{ active: colorMode === 'mode' }" @click="colorMode = 'mode'">{{ t('Phasen') }}</button>
-          <button :class="{ active: colorMode === 'vario' }" @click="colorMode = 'vario'">{{ t('Steigen') }}</button>
-          <button :class="{ active: colorMode === 'speed' }" @click="colorMode = 'speed'">{{ t('Speed') }}</button>
+        <div class="seg" role="group" :aria-label="t('Färbung')">
+          <span class="muted">{{ t('Färbung') }}</span>
+          <button :aria-pressed="colorMode === 'mode'" @click="colorMode = 'mode'">{{ t('Phasen') }}</button>
+          <button :aria-pressed="colorMode === 'vario'" @click="colorMode = 'vario'">{{ t('Steigen') }}</button>
+          <button :aria-pressed="colorMode === 'speed'" @click="colorMode = 'speed'">{{ t('Speed') }}</button>
         </div>
-        <div v-if="res.score" class="seg">
+        <div v-if="res.score" class="seg" role="group" :aria-label="t('Wertung:')">
           <span class="muted">{{ t('Wertung:') }}</span>
-          <button :class="{ active: scoreCode === 'best' }" @click="scoreCode = 'best'">{{ t('Beste') }}</button>
-          <button v-for="(sc, code) in res.score.byCode" :key="code" :class="{ active: scoreCode === code }" @click="scoreCode = code">
+          <button :aria-pressed="scoreCode === 'best'" @click="scoreCode = 'best'">{{ t('Beste') }}</button>
+          <button v-for="(sc, code) in res.score.byCode" :key="code" :aria-pressed="scoreCode === code" @click="scoreCode = code">
             {{ t(F.SCORE_LABEL[code]) }}
           </button>
         </div>
@@ -345,42 +353,42 @@ watch(() => props.id, load);
       <div class="legend">
         <span v-for="x in legend" :key="x.l"><i :style="{ background: x.c }" />{{ x.l }}</span>
         <span v-if="selectedScore" class="score-info">
-          {{ t(F.SCORE_LABEL[selectedScore.code] ?? selectedScore.type) }}: <strong>{{ F.km(selectedScore.distanceKm) }}</strong> · {{ F.num(selectedScore.points, 2) }} P
+          {{ t(F.SCORE_LABEL[selectedScore.code] ?? selectedScore.type) }}: <strong>{{ F.km(selectedScore.distanceKm) }}</strong>, {{ F.num(selectedScore.points, 2) }} P
           (×{{ selectedScore.multiplier }}<template v-if="selectedScore.closing">, {{ t('Schlusslücke') }} {{ F.km(selectedScore.closing.km) }}</template>)
-          <template v-if="!selectedScore.optimal"> · {{ t('nicht optimal (Zeitlimit)') }}</template>
+          <template v-if="!selectedScore.optimal">, {{ t('nicht optimal (Zeitlimit)') }}</template>
         </span>
       </div>
     </section>
 
-    <section class="shares">
-      <div v-if="res.hike" class="panel share">
+    <section class="shares wrap">
+      <div v-if="res.hike" class="share">
         <div class="label">{{ t('Zeit beim Wandern') }}</div>
         <div class="bar"><i v-for="s in shares('hike')" :key="s.label" :style="{ width: `${s.pct}%`, background: s.color }" /></div>
-        <div class="share-legend"><span v-for="s in shares('hike')" :key="s.label"><i :style="{ background: s.color }" />{{ s.label }} {{ Math.round(s.pct) }} % · {{ s.time }}</span></div>
+        <div class="share-legend"><span v-for="s in shares('hike')" :key="s.label"><i :style="{ background: s.color }" />{{ s.label }} {{ Math.round(s.pct) }} %, {{ s.time }}</span></div>
       </div>
-      <div v-if="res.flight" class="panel share">
+      <div v-if="res.flight" class="share">
         <div class="label">{{ t('Zeit in der Luft') }}</div>
         <div class="bar"><i v-for="s in shares('flight')" :key="s.label" :style="{ width: `${s.pct}%`, background: s.color }" /></div>
-        <div class="share-legend"><span v-for="s in shares('flight')" :key="s.label"><i :style="{ background: s.color }" />{{ s.label }} {{ Math.round(s.pct) }} % · {{ s.time }}</span></div>
+        <div class="share-legend"><span v-for="s in shares('flight')" :key="s.label"><i :style="{ background: s.color }" />{{ s.label }} {{ Math.round(s.pct) }} %, {{ s.time }}</span></div>
       </div>
-      <div v-if="res.flight" class="panel share">
+      <div v-if="res.flight" class="share">
         <div class="label">{{ t('Kreise links / rechts') }}</div>
         <div class="bar">
-          <i :style="{ width: `${F.pct(res.flight.circlingLeftS, res.flight.timeCirclingS).replace(' %', '')}%`, background: '#4fc3f7' }" />
-          <i :style="{ flex: 1, background: '#ff8a3d' }" />
+          <i :style="{ width: `${F.pct(res.flight.circlingLeftS, res.flight.timeCirclingS).replace(' %', '')}%`, background: 'var(--sky)' }" />
+          <i :style="{ flex: 1, background: 'var(--lift)' }" />
         </div>
         <div class="share-legend">
-          <span><i style="background:#4fc3f7" />{{ t('Links') }} {{ res.flight.circlesLeft }} {{ t('Kreise') }} · {{ F.dur(res.flight.circlingLeftS) }}</span>
-          <span><i style="background:#ff8a3d" />{{ t('Rechts') }} {{ res.flight.circlesRight }} {{ t('Kreise') }} · {{ F.dur(res.flight.circlingRightS) }}</span>
+          <span><i style="background: var(--sky)" />{{ t('Links') }} {{ res.flight.circlesLeft }} {{ t('Kreise') }}, {{ F.dur(res.flight.circlingLeftS) }}</span>
+          <span><i style="background: var(--lift)" />{{ t('Rechts') }} {{ res.flight.circlesRight }} {{ t('Kreise') }}, {{ F.dur(res.flight.circlingRightS) }}</span>
         </div>
       </div>
     </section>
 
-    <section v-if="hikeGroups.length" class="panel block hike">
+    <section v-if="hikeGroups.length" class="block wrap hike">
       <h2>{{ t('Aufstieg') }} <span class="muted">{{ F.dur(res.hike!.durationS) }}</span></h2>
       <div class="groups">
         <div v-for="g in hikeGroups" :key="g.title" class="group">
-          <div class="label">{{ g.title }}</div>
+          <h3>{{ g.title }}</h3>
           <dl><template v-for="[l, v] in g.rows" :key="l"><dt>{{ l }}</dt><dd>{{ v }}</dd></template></dl>
         </div>
       </div>
@@ -389,27 +397,27 @@ watch(() => props.id, load);
       </p>
     </section>
 
-    <section v-if="flightGroups.length" class="panel block flight">
+    <section v-if="flightGroups.length" class="block wrap flight">
       <h2>{{ t('Flug') }} <span class="muted">{{ F.dur(res.flight!.airtimeS) }}</span></h2>
       <div class="groups">
         <div v-for="g in flightGroups" :key="g.title" class="group">
-          <div class="label">{{ g.title }}</div>
+          <h3>{{ g.title }}</h3>
           <dl><template v-for="[l, v] in g.rows" :key="l"><dt>{{ l }}</dt><dd>{{ v }}</dd></template></dl>
         </div>
       </div>
     </section>
 
-    <section v-if="res.flight" class="panel block">
+    <section v-if="res.flight" class="block wrap">
       <h2>{{ t('Höhe über Grund') }}</h2>
       <GroundPanel :label="ground?.label" :warning="ground?.warning" :progress="groundProgress" @changed="loadGround" />
     </section>
 
-    <section v-if="glides.length" class="panel block">
+    <section v-if="glides.length" class="block wrap">
       <h2 class="with-seg">{{ t('Gleitstrecken') }} <span class="muted">{{ glides.length }} {{ t('ab 1 km') }}</span>
         <span class="seg">
-          <button :class="{ active: glideSort === 'time' }" @click="glideSort = 'time'">{{ t('Zeit') }}</button>
-          <button :class="{ active: glideSort === 'dist' }" @click="glideSort = 'dist'">{{ t('Distanz') }}</button>
-          <button :class="{ active: glideSort === 'ratio' }" @click="glideSort = 'ratio'">{{ t('Gleitzahl') }}</button>
+          <button :aria-pressed="glideSort === 'time'" @click="glideSort = 'time'">{{ t('Zeit') }}</button>
+          <button :aria-pressed="glideSort === 'dist'" @click="glideSort = 'dist'">{{ t('Distanz') }}</button>
+          <button :aria-pressed="glideSort === 'ratio'" @click="glideSort = 'ratio'">{{ t('Gleitzahl') }}</button>
         </span>
       </h2>
       <div class="scroll">
@@ -433,7 +441,7 @@ watch(() => props.id, load);
       </div>
     </section>
 
-    <section v-if="thermals.length" class="panel block">
+    <section v-if="thermals.length" class="block wrap">
       <h2>{{ t('Stärkste Thermiken') }}</h2>
       <div class="scroll-x">
       <table>
@@ -456,63 +464,92 @@ watch(() => props.id, load);
       </div>
     </section>
 
-    <ThermalCircles v-if="res.flight" :result="res" :title="rec?.title ?? ''" />
+    <ThermalCircles v-if="res.flight" class="wrap" :result="res" :title="rec?.title ?? ''" />
   </article>
 </template>
 
 <style scoped>
-.state { padding: 48px; text-align: center; color: var(--muted); }
-.state.error { color: #ff6b6b; }
-.activity { display: flex; flex-direction: column; gap: 16px; max-width: 1200px; margin: 0 auto; }
-.head { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-.title-input { font-size: 28px; font-weight: 800; background: transparent; border: 1px solid transparent; padding: 2px 6px; margin-left: -6px; width: min(640px, 100%); }
-.title-input:hover, .title-input:focus { border-color: var(--line); outline: none; }
-.meta { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 6px; font-size: 14px; }
-.actions { display: flex; gap: 8px; align-items: flex-start; }
-.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
-.scroll-x { overflow-x: auto; }
+.state { padding: 64px 20px; text-align: center; color: var(--lichen); }
+.state.error { color: #ff9b8a; }
+.activity { display: flex; flex-direction: column; gap: 40px; padding-bottom: 48px; }
+
+/* the map is the stage; title and readout sit on the terrain */
+.hero { position: relative; }
+.hero :deep(.map) { height: min(70vh, 660px); border-radius: 0; }
+.hero :deep(.controls) { top: 12px; left: max(12px, calc((100vw - 1120px) / 2)); }
+.hero-text {
+  position: absolute; left: 0; right: 0; bottom: 0; pointer-events: none;
+  padding: 96px max(20px, calc((100vw - 1120px) / 2)) 22px;
+  background: linear-gradient(to top, rgba(20, 28, 25, .9) 0%, rgba(20, 28, 25, .55) 55%, rgba(20, 28, 25, 0) 100%);
+}
+.hero-text > * { pointer-events: auto; }
+.title-input {
+  font-size: var(--fs-5); font-weight: 750; font-variation-settings: var(--wide); letter-spacing: -0.015em;
+  background: transparent; border: 1px solid transparent; border-radius: 4px; padding: 0 6px; margin-left: -7px;
+  width: min(900px, 100%); color: var(--snow); text-shadow: 0 1px 12px rgba(0, 0, 0, .5);
+}
+.title-input:hover { border-color: rgba(241, 240, 234, .35); }
+.hero-meta { margin: 4px 0 18px; color: var(--snow); opacity: .85; }
+.readout { display: flex; flex-wrap: wrap; gap: 8px 36px; margin: 0; }
+.readout div { display: flex; flex-direction: column-reverse; }
+.readout dt { color: var(--snow); opacity: .78; font-size: var(--fs-1); }
+.readout dd { margin: 0; font-size: 34px; line-height: 1.05; font-weight: 700; font-variation-settings: 'wdth' 125; }
+.readout small { font-size: var(--fs-2); font-weight: 500; margin-left: 4px; opacity: .85; }
+
+.wrap { width: 100%; max-width: 1120px; margin: 0 auto; padding: 0 20px; }
+.tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: -16px; }
+.tools .tz { font-size: var(--fs-1); }
+.video-btn { margin-left: auto; }
 .back { margin-top: 14px; }
-.kpi { padding: 14px 16px; }
-.kpi .value { font-size: 26px; font-weight: 700; margin-top: 4px; }
-.mapcard { overflow: hidden; }
-.profile-head { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 10px 12px 0; }
-.seg { display: flex; gap: 4px; align-items: center; font-size: 13px; }
-.seg button { padding: 3px 10px; font-size: 13px; }
-.legend { display: flex; flex-wrap: wrap; gap: 12px; padding: 4px 12px 12px; font-size: 12px; color: var(--muted); align-items: center; }
+
+.profile-head { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px 20px; margin-bottom: 8px; }
+.seg { display: flex; gap: 4px; align-items: center; font-size: var(--fs-1); flex-wrap: wrap; }
+.seg .muted { margin-right: 4px; }
+.seg button { padding: 3px 10px; font-size: var(--fs-1); background: transparent; border-color: var(--rule); }
+.seg button[aria-pressed="true"] { background: var(--snow); color: var(--ground); border-color: var(--snow); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; padding-top: 6px; font-size: var(--fs-1); color: var(--lichen); align-items: center; }
 .legend i, .share-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
-.score-info { margin-left: auto; color: var(--text); }
-.shares { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
-.share { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
-.bar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: var(--panel-2); }
+.score-info { margin-left: auto; color: var(--snow); }
+
+.shares { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px 40px; }
+.share { display: flex; flex-direction: column; gap: 8px; }
+.bar { display: flex; height: 8px; border-radius: 1px; overflow: hidden; background: var(--ground-3); }
 .bar i { display: block; height: 100%; }
-.share-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); }
-.block { padding: 18px 20px; }
-.block h2 { font-size: 18px; margin-bottom: 14px; }
-.block.hike { box-shadow: inset 4px 0 var(--hike); }
-.block.flight { box-shadow: inset 4px 0 var(--flight); }
-.groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 18px 28px; }
-.group .label { color: var(--accent); margin-bottom: 6px; }
-dl { display: grid; grid-template-columns: 1fr auto; gap: 5px 12px; margin: 0; font-size: 14px; }
-dt { color: var(--muted); }
-dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
-.note { font-size: 13px; color: var(--muted); margin: 14px 0 0; }
-table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
-th { text-align: left; font-weight: 500; color: var(--muted); font-size: 12px; padding: 6px 8px; border-bottom: 1px solid var(--line); }
-td { padding: 6px 8px; border-bottom: 1px solid var(--line); }
-tbody tr:hover { background: var(--panel-2); }
+.share-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: var(--fs-1); color: var(--lichen); }
+
+/* sections: a heading and a hairline, no boxes */
+.block > h2 { padding-top: 18px; border-top: 1px solid var(--rule); margin-bottom: 18px; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.block > h2 .muted { font-size: var(--fs-2); font-weight: 400; font-variation-settings: normal; }
+.groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 28px 44px; }
+.group h3 { font-size: var(--fs-2); margin-bottom: 8px; }
+dl { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; margin: 0; font-size: 14px; }
+.group dl > dt, .group dl > dd { padding-bottom: 6px; border-bottom: 1px solid var(--rule); }
+dt { color: var(--lichen); }
+dd { margin: 0; text-align: right; font-weight: 600; }
+.note { font-size: var(--fs-1); color: var(--lichen); margin: 14px 0 0; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { text-align: left; font-weight: 500; color: var(--lichen); font-size: var(--fs-1); padding: 6px 8px; border-bottom: 1px solid var(--control-line); white-space: nowrap; }
+td { padding: 7px 8px; border-bottom: 1px solid var(--rule); }
+tbody tr:hover { background: var(--ground-2); }
 td.strong { font-weight: 700; }
-td.accel { color: var(--accent); font-weight: 600; }
-.with-seg { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.with-seg .seg { margin-left: auto; font-weight: 400; }
-.scroll { max-height: 420px; overflow: auto; }
-.scroll thead th { position: sticky; top: 0; background: var(--panel); }
+td.accel { color: var(--lift); font-weight: 600; }
+.with-seg .seg { margin-left: auto; font-weight: 400; font-variation-settings: normal; }
+.scroll { max-height: 440px; overflow: auto; }
+.scroll-x { overflow-x: auto; }
+.scroll thead th { position: sticky; top: 0; background: var(--ground); }
 @media (max-width: 800px) {
-  .title-input { font-size: 20px; width: 100%; }
+  .activity { gap: 32px; }
+  .hero :deep(.map) { height: 62vh; }
+  .hero :deep(.controls) { left: 12px; }
+  .hero-text { padding: 72px 16px 16px; }
+  .title-input { font-size: 21px; font-variation-settings: normal; }
+  .hero-meta { margin-bottom: 12px; font-size: var(--fs-1); }
+  .readout { gap: 6px 22px; }
+  .readout dd { font-size: 24px; }
+  .wrap { padding: 0 16px; }
+  .tools { margin-top: -12px; }
+  .video-btn { margin-left: 0; flex: 1 1 100%; order: -1; }
   table { font-size: 12px; }
-  .kpis { grid-template-columns: 1fr 1fr; gap: 8px; }
-  .kpi { padding: 10px 12px; }
-  .kpi .value { font-size: 20px; }
-  .block { padding: 14px; }
   .scroll { overflow-x: auto; }
 }
 </style>

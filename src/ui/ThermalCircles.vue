@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
-import { varioColor } from '../app/colors';
 import * as F from '../app/format';
 import { i18n, locale, t } from '../app/i18n';
 import type { ActivityResult } from '../app/types';
@@ -8,11 +7,15 @@ import { bands, CENTRED_SHARE, centring, climbHistogram, meanOf, type CircleStat
 
 const props = defineProps<{ result: ActivityResult; title: string }>();
 
-const LEFT = '#4fc3f7';
-const RIGHT = '#ff8a3d';
-const GRID = '#2a3441';
-const MUTED = '#8b98a8';
-const TEXT = '#e6edf3';
+// same values as the tokens in style.css (canvas cannot read CSS variables cheaply)
+const LEFT = '#8ccbe6'; // sky
+const RIGHT = '#f0c24b'; // lift
+const GRID = '#34423d';
+const MUTED = '#aab4ab';
+const TEXT = '#f1f0ea';
+const BG = '#1b2421';
+/** one accent: climb in lift yellow, sink in sky blue, strength as opacity */
+const climbColor = (v: number) => (v < 0 ? `rgba(140, 203, 230, ${Math.min(1, 0.45 + -v / 4)})` : `rgba(240, 194, 75, ${Math.min(1, 0.35 + v / 4)})`);
 
 type ChartId = 'hist' | 'size' | 'alt' | 'time' | 'centre';
 const charts: { id: ChartId; title: string; hint: string }[] = [
@@ -37,14 +40,14 @@ const kpis = computed(() => {
   const right = cs.filter((c) => c.dir > 0);
   const diam = (l: CircleStat[]) => F.m(meanOf(l, (c) => 2 * c.radiusM));
   return [
-    [t('Vollkreise'), `${cs.length}`, `${left.length} ${t('links')} · ${right.length} ${t('rechts')}`],
-    [t('Ø Durchmesser'), diam(cs), `${t('links')} ${diam(left)} · ${t('rechts')} ${diam(right)}`],
+    [t('Vollkreise'), `${cs.length}`, `${left.length} ${t('links')}, ${right.length} ${t('rechts')}`],
+    [t('Ø Durchmesser'), diam(cs), `${t('links')} ${diam(left)}, ${t('rechts')} ${diam(right)}`],
     [t('Ø Querlage'), `${F.num(meanOf(cs, (c) => c.bankDeg))}°`, `${t('Ø Kreiszeit')} ${F.num(meanOf(cs, (c) => c.durationS))} s`],
     [t('Ø Steigen im Kreis'), F.vario(meanOf(cs, (c) => c.climb)), `${t('bester Kreis')} ${F.vario(cs.length ? Math.max(...cs.map((c) => c.climb)) : null)}`],
     [
       t('Zentriert nach'),
       done.length ? `${F.num(median(done.map((c) => c.centredAfterS!)))} s` : '–',
-      done.length ? `${t('Median')} · ${t('Kreis')} ${F.num(median(done.map((c) => c.centredTurn!)))}` : '',
+      done.length ? `${t('Median')}, ${t('Kreis')} ${F.num(median(done.map((c) => c.centredTurn!)))}` : '',
     ],
   ];
 });
@@ -118,7 +121,7 @@ function draw(id: ChartId, g: CanvasRenderingContext2D, W: number, H: number) {
     const hi = hist[hist.length - 1].lo + 0.5;
     const x = axisX(g, b, lo, hi, nf1, hi - lo > 6 ? 1 : 0.5);
     for (const h of hist) {
-      g.fillStyle = varioColor(h.lo + 0.25);
+      g.fillStyle = climbColor(h.lo + 0.25);
       g.fillRect(x(h.lo) + 1, y(h.s / 60), Math.max(1, x(h.lo + 0.5) - x(h.lo) - 2), y(0) - y(h.s / 60));
       if (h.s / totalS.value >= 0.04) label(g, `${Math.round((h.s / totalS.value) * 100)} %`, (x(h.lo) + x(h.lo + 0.5)) / 2, y(h.s / 60) - 4, 'center', TEXT);
     }
@@ -166,14 +169,14 @@ function draw(id: ChartId, g: CanvasRenderingContext2D, W: number, H: number) {
     bs.forEach((band, k) => {
       const yy = bx.y + bx.h - (k + 1) * rowH;
       const w = Math.max(2, (band.s / maxS) * bx.w);
-      g.fillStyle = varioColor(band.climb);
+      g.fillStyle = climbColor(band.climb);
       g.fillRect(bx.x, yy + 2, w, Math.max(1, rowH - 4));
       g.fillStyle = MUTED;
       g.textAlign = 'right';
       g.fillText(nf0(band.lo), bx.x - 6, yy + rowH);
       g.fillStyle = TEXT;
       g.textAlign = 'left';
-      g.fillText(`${band.climb >= 0 ? '+' : ''}${nf1(band.climb)} m/s · ${F.dur(band.s)}`, bx.x + w + 6, yy + rowH / 2);
+      g.fillText(`${band.climb >= 0 ? '+' : ''}${nf1(band.climb)} m/s, ${F.dur(band.s)}`, bx.x + w + 6, yy + rowH / 2);
     });
     g.fillStyle = MUTED;
     g.textAlign = 'right';
@@ -194,7 +197,7 @@ function draw(id: ChartId, g: CanvasRenderingContext2D, W: number, H: number) {
     const tick = (t1 - t0) / HALF > 12 ? 2 * HALF : HALF;
     for (let v = Math.ceil(t0 / tick) * tick; v <= t1; v += tick) g.fillText(F.clock(v, tz.value), x(v), b.y + b.h + 6);
     for (const band of bs) {
-      g.fillStyle = varioColor(band.climb);
+      g.fillStyle = climbColor(band.climb);
       g.globalAlpha = 0.6;
       const top = y(Math.max(0, band.climb));
       const bot = y(Math.min(0, band.climb));
@@ -214,8 +217,8 @@ function draw(id: ChartId, g: CanvasRenderingContext2D, W: number, H: number) {
     const x = axisX(g, b, 1, N, nf0, N > 10 && b.w < 500 ? 2 : 1);
     g.lineWidth = 1.2;
     for (const c of list) {
-      g.strokeStyle = varioColor(c.best);
-      g.globalAlpha = 0.5;
+      g.strokeStyle = MUTED;
+      g.globalAlpha = 0.35;
       g.beginPath();
       c.circles.slice(0, N).forEach((p, k) => (k ? g.lineTo(x(k + 1), y(p.climb)) : g.moveTo(x(k + 1), y(p.climb))));
       g.stroke();
@@ -227,13 +230,13 @@ function draw(id: ChartId, g: CanvasRenderingContext2D, W: number, H: number) {
       const v = list.filter((c) => c.circles.length > k).map((c) => c.circles[k].climb);
       if (v.length >= 2) mean.push([k + 1, v.reduce((a, q) => a + q, 0) / v.length]);
     }
-    g.strokeStyle = TEXT;
+    g.strokeStyle = RIGHT;
     g.lineWidth = 3;
     g.beginPath();
     mean.forEach(([k, v], i) => (i ? g.lineTo(x(k), y(v)) : g.moveTo(x(k), y(v))));
     g.stroke();
     g.lineWidth = 1;
-    g.fillStyle = TEXT;
+    g.fillStyle = RIGHT;
     for (const [k, v] of mean) dot(g, x(k), y(v), 3);
     label(g, 'm/s', 6, b.y - 4);
     label(g, t('Kreis Nr. ab Einflug'), W - 12, H - 2, 'right');
@@ -280,7 +283,7 @@ function savePng(id: ChartId) {
   cv.height = (top + CH + bottom) * s;
   const g = cv.getContext('2d')!;
   g.scale(s, s);
-  g.fillStyle = '#0d1117';
+  g.fillStyle = BG;
   g.fillRect(0, 0, W, top + CH + bottom);
   g.textAlign = 'left';
   g.textBaseline = 'alphabetic';
@@ -289,7 +292,7 @@ function savePng(id: ChartId) {
   g.fillText(t(c.title), 24, 40);
   g.fillStyle = MUTED;
   g.font = '15px system-ui';
-  g.fillText(`${props.title} · ${t(c.hint)}`, 24, 66);
+  g.fillText(`${props.title}, ${t(c.hint)}`, 24, 66);
   g.save();
   g.translate(12, top);
   g.scale(k, k);
@@ -311,12 +314,12 @@ function savePng(id: ChartId) {
 </script>
 
 <template>
-  <section v-if="circles.length >= 5" class="panel block circles">
+  <section v-if="circles.length >= 5" class="block circles">
     <h2>{{ t('Thermik & Kreisformen') }}</h2>
     <div class="ckpis">
       <div v-for="k in kpis" :key="k[0]" class="ckpi">
-        <div class="label">{{ k[0] }}</div>
         <div class="value">{{ k[1] }}</div>
+        <div class="name">{{ k[0] }}</div>
         <div class="muted sub">{{ k[2] }}</div>
       </div>
     </div>
@@ -340,10 +343,11 @@ function savePng(id: ChartId) {
 </template>
 
 <style scoped>
-.ckpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 18px; }
-.ckpi { background: var(--panel-2); border-radius: 10px; padding: 10px 12px; }
-.ckpi .value { font-size: 22px; font-weight: 700; margin: 2px 0; font-variant-numeric: tabular-nums; }
-.ckpi .sub { font-size: 12px; }
+.circles > h2 { padding-top: 18px; border-top: 1px solid var(--rule); margin-bottom: 18px; }
+.ckpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 16px 32px; margin-bottom: 28px; }
+.ckpi .value { font-size: 28px; font-weight: 700; line-height: 1.1; font-variation-settings: 'wdth' 125; }
+.ckpi .name { font-size: var(--fs-2); margin-top: 2px; }
+.ckpi .sub { font-size: var(--fs-1); }
 .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr)); gap: 20px 26px; }
 .chart { margin: 0; min-width: 0; }
 .chart.centre { grid-column: 1 / -1; }

@@ -180,7 +180,7 @@ Er ist vorbereitet, aber noch nicht im Repo: Workflow-Dateien lassen sich nur mi
 `workflow` hochladen (`gh auth refresh -h github.com -s workflow`). Danach die Datei committen und unter
 *Settings → Pages* die Quelle auf „GitHub Actions“ stellen.
 
-Welche Version online ist, steht unten in der Seitenleiste: `v0.3.0 · Build 14 · 1a2b3c4 · 05.11.2026`
+Welche Version online ist, steht unten in der Seitenleiste: `v0.4.0, Build 16, 1a2b3c4, 05.11.2026`
 (Version aus `package.json`, Build = Anzahl Commits, Commit-Kürzel, Build-Datum; ein `+` hinter dem Commit heisst:
 mit nicht committeten Änderungen gebaut). Ein Klick öffnet den Commit auf GitHub.
 

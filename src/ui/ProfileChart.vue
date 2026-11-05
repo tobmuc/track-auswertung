@@ -49,7 +49,7 @@ function draw() {
 
   // grid + altitude axis
   g.font = '11px system-ui';
-  g.fillStyle = '#8b98a8';
+  g.fillStyle = '#aab4ab';
   g.strokeStyle = '#2a3441';
   g.lineWidth = 1;
   g.textAlign = 'right';
@@ -145,7 +145,7 @@ function draw() {
     g.strokeStyle = '#fff';
     g.lineWidth = 1;
     g.beginPath(); g.moveTo(X, PAD.t); g.lineTo(X, y(lo)); g.stroke();
-    g.fillStyle = '#ff8a3d';
+    g.fillStyle = '#f0c24b';
     g.beginPath(); g.arc(X, y(tl.alt[props.hoverIdx]), 4, 0, Math.PI * 2); g.fill();
   }
 }
@@ -207,6 +207,6 @@ canvas { display: block; }
 .tip {
   position: absolute; top: 4px; transform: translateX(-50%); pointer-events: none; white-space: nowrap;
   display: flex; gap: 8px; padding: 3px 8px; border-radius: 6px; font-size: 12px;
-  background: rgba(13, 17, 23, .9); border: 1px solid var(--line);
+  background: rgba(27, 36, 33, .94); border: 1px solid var(--rule);
 }
 </style>

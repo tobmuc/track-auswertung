@@ -778,7 +778,7 @@ onUnmounted(() => {
 .stale-note { margin: 0; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: center; color: #ffca28; font-size: 14px; text-align: center; }
 .settings { padding: 16px; display: flex; flex-direction: column; gap: 14px; position: sticky; top: 16px; }
 fieldset { border: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
-legend { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); margin-bottom: 6px; }
+legend { font-size: var(--fs-2); font-weight: 700; font-variation-settings: var(--wide); color: var(--snow); margin-bottom: 8px; }
 label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
 label.check { flex-direction: row; align-items: flex-start; gap: 8px; }
 label input[type=range] { accent-color: var(--accent); }
