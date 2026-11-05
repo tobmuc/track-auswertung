@@ -1,5 +1,6 @@
 import type { AirspeedStats } from './airspeed';
 import type { FlightReview } from './review';
+import type { PolarInfo } from './polars';
 export type Sport = 'paragliding' | 'hikefly' | 'hanggliding' | 'hiking';
 
 /** One GPS fix. Times in ms since epoch (UTC), altitudes in m MSL. */
@@ -175,6 +176,8 @@ export interface FlightStats {
   airspeed: Omit<AirspeedStats, 'air'> | null;
   /** what went well and where there was likely room for improvement */
   review: FlightReview;
+  /** the polar the review used */
+  polar: PolarInfo;
   winds: Wind[];
   wind: Wind | null;
   modeShare: Record<FlightMode, number>;

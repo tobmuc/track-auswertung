@@ -1,4 +1,4 @@
-import type { FlightStats, Glide, HikeStats, RuleSet, ScoreSet, Sport, Thermal } from '../core';
+import type { FlightStats, Glide, HikeStats, PolarChoice, RuleSet, ScoreSet, Sport, Thermal } from '../core';
 
 export interface Timeline {
   t: Float64Array;
@@ -39,6 +39,7 @@ export interface WorkerRequest {
   files: { name: string; text: string }[];
   sport?: Sport;
   rules: RuleSet;
+  polar?: PolarChoice;
 }
 
 export interface ActivityRecord {
@@ -47,6 +48,8 @@ export interface ActivityRecord {
   /** User override; undefined = detect automatically */
   sport?: Sport;
   rules: RuleSet;
+  /** glider polar for the review; undefined = from the glider name in the IGC, else a typical one */
+  polar?: PolarChoice;
   createdAt: number;
   date: string;
   files: { name: string; text: string }[];

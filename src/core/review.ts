@@ -1,6 +1,7 @@
 import { centring } from './circles';
 import { localXY } from './geo';
 import type { AirspeedStats } from './airspeed';
+import { sinkAt, speedToFly, timePerMetre, type Polar } from './polar';
 import type { CircleStat, Glide, Series, Thermal, TrackPoint } from './types';
 
 /**
@@ -18,12 +19,17 @@ export type FindingTopic =
   | 'headwind-trim' // long headwind glide flown at trim speed
   | 'sink-trim' // long sinking glide flown at trim speed
   | 'circle-size' // wider circles climbed worse than tighter ones
+  | 'stf-slow' // glide flown slower than speed to fly (polar, wind, netto, next climb)
+  | 'stf-fast' // glide flown faster than speed to fly
+  | 'polar-sink' // sank more than the polar at trim speed, over the whole flight
   // went well
   | 'best-thermal'
   | 'best-glide'
   | 'fast-centring'
   | 'speed-to-fly'
-  | 'fastest-leg';
+  | 'fastest-leg'
+  | 'stf-good' // long glide close to speed to fly
+  | 'polar-ok'; // sank no more than the polar at trim speed
 
 export interface Finding {
   kind: 'good' | 'improve';
@@ -53,6 +59,7 @@ interface Input {
   glides: Glide[];
   airspeed: AirspeedStats | null;
   avgClimbInThermals: number | null;
+  polar: Polar;
 }
 
 export function reviewFlight(x: Input): FlightReview {
@@ -148,8 +155,55 @@ export function reviewFlight(x: Input): FlightReview {
     });
   }
 
-  // ---- glides: headwind or sink at trim speed, best glide
+  // ---- speed to fly per glide from the polar: wind along the glide, netto (air motion), next climb
+  const polarGlides: { g: Glide; lost: number; vOpt: number; netto: number; mc: number }[] = [];
   if (airspeed) {
+    for (const g of glides) {
+      if (g.airKmh == null || g.windAlongKmh == null || g.durationS < 120 || g.distanceKm < 1.5) continue;
+      const v = g.airKmh / 3.6;
+      const w = g.windAlongKmh / 3.6;
+      // netto: measured vertical speed plus what the wing alone would sink at this airspeed
+      const netto = g.avgVario + sinkAt(x.polar, v);
+      const next = thermals.find((t) => t.start >= g.end);
+      // the glide to landing has no climb to fly for: speed to fly does not apply
+      if (!next) continue;
+      const mc = Math.max(0.3, next.avgClimb);
+      const opt = speedToFly(x.polar, w, netto, mc);
+      const lost = g.distanceKm * 1000 * (timePerMetre(x.polar, v, w, netto, mc) - opt.timePerM);
+      polarGlides.push({ g, lost, vOpt: opt.v * 3.6, netto, mc });
+    }
+    for (const p of polarGlides) {
+      const diff = p.g.airKmh! - p.vOpt;
+      const v = { airKmh: p.g.airKmh!, optKmh: p.vOpt, windKmh: p.g.windAlongKmh!, nettoMs: p.netto, mcMs: p.mc, distKm: p.g.distanceKm, durS: p.g.durationS, lostS: p.lost };
+      if (p.lost >= 20 && Math.abs(diff) >= 4) {
+        improve.push({ kind: 'improve', topic: diff < 0 ? 'stf-slow' : 'stf-fast', start: p.g.start, end: p.g.end, score: p.lost, v });
+      }
+    }
+    const close = polarGlides.filter((p) => Math.abs(p.g.airKmh! - p.vOpt) <= 3 && p.g.distanceKm >= 3).sort((a, b) => b.g.distanceKm - a.g.distanceKm)[0];
+    if (close) {
+      good.push({ kind: 'good', topic: 'stf-good', start: close.g.start, end: close.g.end, score: 700 + close.g.distanceKm,
+        v: { airKmh: close.g.airKmh!, optKmh: close.vOpt, windKmh: close.g.windAlongKmh!, nettoMs: close.netto, mcMs: close.mc, distKm: close.g.distanceKm } });
+    }
+
+    // sink at trim speed against the polar, over all straight flight: a hint at harness, weight, brake
+    // position or simply sinking air between thermals; worth a look only if it repeats over many flights
+    const trimSinks: number[] = [];
+    for (let i = 1; i < n; i++) {
+      const a = airspeed.air[i];
+      if (a === a && Math.abs(a - airspeed.trimKmh) <= 2.5) trimSinks.push(-s.vario[i]);
+    }
+    if (trimSinks.length >= 120) {
+      trimSinks.sort((a, b) => a - b);
+      const measured = trimSinks[trimSinks.length >> 1];
+      const expected = sinkAt(x.polar, airspeed.trimKmh / 3.6);
+      const v = { measuredMs: measured, polarMs: expected, trimKmh: airspeed.trimKmh, samples: trimSinks.length };
+      if (measured - expected >= 0.15) improve.push({ kind: 'improve', topic: 'polar-sink', start: 0, end: n - 1, score: 1, v });
+      else if (measured - expected <= 0.05) good.push({ kind: 'good', topic: 'polar-ok', start: 0, end: n - 1, score: 400, v });
+    }
+  }
+
+  // ---- glides without a polar view: headwind or sink at trim speed, best glide
+  if (airspeed && !polarGlides.length) {
     const trim = airspeed.trimKmh;
     for (const g of glides) {
       if (g.airKmh == null || g.windAlongKmh == null || g.durationS < 120) continue;

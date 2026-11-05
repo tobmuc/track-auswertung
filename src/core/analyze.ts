@@ -2,6 +2,7 @@ import { analyzeFlight, detectFlight } from './flight';
 import { analyzeHike } from './hike';
 import { buildSeries } from './series';
 import type { Analysis, Range, Segment, Sport, Track } from './types';
+import type { PolarChoice } from './polars';
 
 const MIN_HIKE_S = 10 * 60;
 const MIN_HIKE_GAIN = 100;
@@ -10,7 +11,7 @@ const MIN_HIKE_GAIN = 100;
  * Splits the given tracks into hike and flight segments and computes their statistics.
  * One file may contain hike + flight (split at launch); a hike GPX plus a flight IGC also works.
  */
-export function analyzeTracks(tracks: Track[], sportHint?: Sport): Analysis {
+export function analyzeTracks(tracks: Track[], sportHint?: Sport, polar?: PolarChoice): Analysis {
   const segments: Segment[] = [];
   const sorted = [...tracks].filter((t) => t.points.length > 1).sort((a, b) => a.points[0].t - b.points[0].t);
 
@@ -31,7 +32,7 @@ export function analyzeTracks(tracks: Track[], sportHint?: Sport): Analysis {
       if (dur >= MIN_HIKE_S && gain >= MIN_HIKE_GAIN) segments.push(hikeSegment(track, pre));
     }
     const series = buildSeries(pts, flight, 5);
-    segments.push({ kind: 'flight', track, range: flight, series, flight: analyzeFlight(pts, flight, series) });
+    segments.push({ kind: 'flight', track, range: flight, series, flight: analyzeFlight(pts, flight, series, polar ?? null, track.glider) });
   }
 
   const hikes = segments.filter((s) => s.kind === 'hike');

@@ -6,3 +6,5 @@ export { compass } from './geo';
 export * from './circles';
 export * from './airspeed';
 export * from './review';
+export * from './polar';
+export * from './polars';

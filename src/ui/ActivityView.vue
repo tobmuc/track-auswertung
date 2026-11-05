@@ -69,7 +69,7 @@ async function update(patch: Partial<ActivityRecord>) {
   if (!rec.value) return;
   await db.activities.update(props.id, patch);
   rec.value = { ...rec.value, ...patch };
-  if ('sport' in patch || 'rules' in patch) {
+  if ('sport' in patch || 'rules' in patch || 'polar' in patch) {
     res.value = await analyzeRecord(rec.value);
     await db.activities.update(props.id, {
       summary: { ...rec.value.summary!, sport: res.value.sport, xcKm: res.value.score?.best.distanceKm },
@@ -340,7 +340,7 @@ watch(() => props.id, load);
       <button @click="remove">{{ t('Löschen') }}</button>
     </div>
 
-    <FlightReview v-if="res.flight" class="wrap" :result="res" @select="showAt" />
+    <FlightReview v-if="res.flight" class="wrap" :result="res" :polar-id="rec.polar?.id ?? ''" @select="showAt" @polar="(id) => update({ polar: id ? { id } : undefined })" />
 
     <section class="wrap profile">
       <div class="profile-head">

@@ -1,6 +1,7 @@
 import { angleDiff, bearingDeg, distM, localXY } from './geo';
 import { airspeedStats } from './airspeed';
 import { reviewFlight } from './review';
+import { resolvePolar, type PolarChoice } from './polars';
 import { gainLoss, windowRate } from './series';
 import type { CircleStat, Circling, CorePoint, FlightMode, FlightStats, Glide, Range, Series, Thermal, TrackPoint, Wind } from './types';
 
@@ -161,7 +162,7 @@ function toWind(vx: number, vy: number, alt: number, t: number): Wind {
   return { fromDeg: (toDeg + 180 + 360) % 360, speedKmh: Math.hypot(vx, vy) * 3.6, alt, t };
 }
 
-export function analyzeFlight(pts: TrackPoint[], r: Range, s: Series): FlightStats {
+export function analyzeFlight(pts: TrackPoint[], r: Range, s: Series, polarChoice: PolarChoice | null = null, glider?: string): FlightStats {
   const n = r.end - r.start + 1;
   const last = n - 1;
   const { circlings, heading } = detectCircling(pts, r, s);
@@ -340,10 +341,12 @@ export function analyzeFlight(pts: TrackPoint[], r: Range, s: Series): FlightSta
   const maxAlt = Math.max(...altRaw);
 
   const avgClimbInThermals = thermalS > 0 ? thermalGain / thermalS : null;
-  const review = reviewFlight({ pts, off: r.start, s, thermals, circles, glides, airspeed: air, avgClimbInThermals });
+  const polar = resolvePolar(polarChoice, glider);
+  const review = reviewFlight({ pts, off: r.start, s, thermals, circles, glides, airspeed: air, avgClimbInThermals, polar: polar.polar });
 
   return {
     review,
+    polar: polar.info,
     launchIdx: r.start,
     landingIdx: r.end,
     launchTime: p0.t,

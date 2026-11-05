@@ -2,7 +2,7 @@
 import tzlookup from 'tz-lookup';
 import { analyzeTracks, parseTrack, scoreAll } from '../core';
 import { breakMask, hikeModes } from '../core/hike';
-import type { RuleSet, Sport } from '../core';
+import type { PolarChoice, RuleSet, Sport } from '../core';
 import type { ActivityResult, Timeline, WorkerRequest } from './types';
 
 /** Mode codes shared with colours.ts */
@@ -10,17 +10,17 @@ const HIKE_CODE = { up: 0, down: 1, flat: 2, break: 3 } as const;
 const FLIGHT_CODE = { circling: 4, climb: 5, glide: 6, sink: 7 } as const;
 
 self.onmessage = (ev: MessageEvent<WorkerRequest>) => {
-  const { id, files, sport, rules } = ev.data;
+  const { id, files, sport, rules, polar } = ev.data;
   try {
-    self.postMessage({ id, result: analyze(files, sport, rules) });
+    self.postMessage({ id, result: analyze(files, sport, rules, polar) });
   } catch (e) {
     self.postMessage({ id, error: e instanceof Error ? e.message : String(e) });
   }
 };
 
-function analyze(files: { name: string; text: string }[], sport: Sport | undefined, rules: RuleSet): ActivityResult {
+function analyze(files: { name: string; text: string }[], sport: Sport | undefined, rules: RuleSet, polar?: PolarChoice): ActivityResult {
   const tracks = files.map((f) => parseTrack(f.name, f.text));
-  const analysis = analyzeTracks(tracks, sport);
+  const analysis = analyzeTracks(tracks, sport, polar);
 
   // flat timeline over all segments for map and profile
   let n = 0;

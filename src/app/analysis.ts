@@ -15,13 +15,13 @@ worker.onmessage = (ev: MessageEvent<{ id: number; result?: ActivityResult; erro
 /** In-memory cache: analysing a 4 h flight takes a few seconds (mostly the XC optimiser) */
 const cache = new Map<string, Promise<ActivityResult>>();
 
-export function analyzeRecord(rec: Pick<ActivityRecord, 'files' | 'sport' | 'rules'>): Promise<ActivityResult> {
-  const key = JSON.stringify([rec.files.map((f) => [f.name, f.text.length]), rec.sport, rec.rules]);
+export function analyzeRecord(rec: Pick<ActivityRecord, 'files' | 'sport' | 'rules' | 'polar'>): Promise<ActivityResult> {
+  const key = JSON.stringify([rec.files.map((f) => [f.name, f.text.length]), rec.sport, rec.rules, rec.polar ?? null]);
   let p = cache.get(key);
   if (!p) {
     const id = nextId++;
     p = new Promise<ActivityResult>((resolve, reject) => pending.set(id, { resolve, reject }));
-    const req: WorkerRequest = { id, files: rec.files, sport: rec.sport, rules: rec.rules };
+    const req: WorkerRequest = { id, files: rec.files, sport: rec.sport, rules: rec.rules, polar: rec.polar ? JSON.parse(JSON.stringify(rec.polar)) : undefined };
     worker.postMessage(req);
     p.catch(() => cache.delete(key));
     cache.set(key, p);

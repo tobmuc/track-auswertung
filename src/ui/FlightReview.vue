@@ -3,10 +3,16 @@ import { computed } from 'vue';
 import * as F from '../app/format';
 import { t } from '../app/i18n';
 import type { ActivityResult } from '../app/types';
-import type { Finding } from '../core';
+import { POLARS, type Finding } from '../core';
 
-const props = defineProps<{ result: ActivityResult }>();
-const emit = defineEmits<{ select: [idx: number] }>();
+const props = defineProps<{ result: ActivityResult; polarId: string }>();
+const emit = defineEmits<{ select: [idx: number]; polar: [id: string] }>();
+
+const polarInfo = computed(() => props.result.flight?.polar);
+const classes = POLARS.filter((p) => !p.model);
+const models = [...POLARS.filter((p) => p.model)].sort((a, b) => a.label.localeCompare(b.label));
+/** a recommendation beyond the speeds the polar has data for */
+const beyond = (kmhValue: number) => polarInfo.value && kmhValue > polarInfo.value.windowToKmh + 1;
 
 const review = computed(() => props.result.flight?.review);
 const offset = computed(() => props.result.segments.find((s) => s.kind === 'flight')?.offset ?? 0);
@@ -52,6 +58,20 @@ function describe(f: Finding): { title: string; text: string; whole: boolean } {
     case 'circle-size':
       return { whole: true, title: t('Engere Kreise stiegen besser'), text: fill(t('Kreise bis {tight} Durchmesser: {tightMs}. Kreise ab {wide}: {wideMs}. In weiten Kreisen warst du {wideS} unterwegs; enger kreisen hätte grob {lost} gebracht.'), {
         tight: m(v.tightD), wide: m(v.wideD), tightMs: ms(v.tightMs), wideMs: ms(v.wideMs), wideS: sec(v.wideS), lost: sec(v.lostS) }) };
+    case 'stf-slow':
+    case 'stf-fast':
+      return { whole: false, title: t(f.topic === 'stf-slow' ? 'Langsamer als die Sollfahrt' : 'Schneller als die Sollfahrt'), text: fill(t('{time}: {dist} mit {air} Fahrt. Nach der Polare wären {opt} besser gewesen (Wind {wind}, Luftmasse {netto}, nächster Bart {mc}). Grob {lost} Unterschied, gerechnet bis zum Wiederaufkurbeln der Höhe.'), {
+        time, dist: F.km(v.distKm, 1), air: kmh(v.airKmh), opt: kmh(v.optKmh), wind: F.signed(v.windKmh, 'km/h'), netto: F.vario(v.nettoMs), mc: ms(v.mcMs), lost: sec(v.lostS) })
+        + (beyond(v.optKmh) ? ' ' + fill(t('Über {w} hat die Polare keine Messdaten mehr, dort ist sie fortgeschrieben.'), { w: kmh(polarInfo.value!.windowToKmh) }) : '') };
+    case 'stf-good':
+      return { whole: false, title: t('Gleitstrecke nach Sollfahrt'), text: fill(t('{time}: {dist} mit {air} Fahrt, die Polare empfiehlt {opt} (Wind {wind}, Luftmasse {netto}, nächster Bart {mc}).'), {
+        time, dist: F.km(v.distKm, 1), air: kmh(v.airKmh), opt: kmh(v.optKmh), wind: F.signed(v.windKmh, 'km/h'), netto: F.vario(v.nettoMs), mc: ms(v.mcMs) }) };
+    case 'polar-sink':
+      return { whole: true, title: t('Mehr Sinken als die Polare'), text: fill(t('In Trimmfahrt ({trim}) sankst du im Median {measured}, die Polare sagt {polar}. Ein Teil davon ist sinkende Luft zwischen den Bärten. Zeigt sich der Unterschied über viele Flüge, lohnt ein Blick auf Gurtzeug und Beinsack, Startgewicht und eine ruhige Bremsstellung.'), {
+        trim: kmh(v.trimKmh), measured: F.vario(-v.measuredMs), polar: F.vario(-v.polarMs) }) };
+    case 'polar-ok':
+      return { whole: true, title: t('Sinken wie die Polare'), text: fill(t('In Trimmfahrt ({trim}) sankst du im Median {measured}, die Polare sagt {polar}.'), {
+        trim: kmh(v.trimKmh), measured: F.vario(-v.measuredMs), polar: F.vario(-v.polarMs) }) };
     case 'best-thermal':
       return { whole: false, title: t('Stärkster Bart'), text: fill(t('{time}: {climb} im Schnitt, {gain} Höhengewinn bis {top}. Der Tagesschnitt lag bei {day}.'), {
         time, climb: ms(v.climbMs), gain: m(v.gainM), top: m(v.topM), day: ms(v.dayMs) }) };
@@ -87,6 +107,19 @@ function pick(f: Finding, whole: boolean) {
       <template v-if="improve.length">{{ fill(t('{n} Abschnitte mit Potenzial, zusammen grob {time}. {g} Stärken.'), { n: String(improve.length), time: F.dur(potentialS), g: String(good.length) }) }}</template>
       <template v-else>{{ t('Keine auffälligen Schwächen gefunden.') }}</template>
     </p>
+    <p v-if="polarInfo" class="polar">
+      <label>
+        {{ t('Polare') }}
+        <select :value="polarId" @change="emit('polar', ($event.target as HTMLSelectElement).value)">
+          <option value="">{{ t('Automatisch') }} ({{ polarInfo.how === 'glider-name' ? polarInfo.label : t('EN-B (Klassenmittel)') }})</option>
+          <optgroup :label="t('Klassen')"><option v-for="p in classes" :key="p.id" :value="p.id">{{ t(p.label) }}</option></optgroup>
+          <optgroup :label="t('Schirme')"><option v-for="p in models" :key="p.id" :value="p.id">{{ p.label }}</option></optgroup>
+        </select>
+      </label>
+      <span class="muted">{{ fill(t('{how}. Quelle: {src}, {n} Flüge, Messbereich {from} bis {to}.'), {
+        how: polarInfo.how === 'glider-name' ? t('Aus dem Schirmnamen im IGC erkannt') : polarInfo.how === 'chosen' ? t('Von dir gewählt') : t('Schirm nicht erkannt, Klassenmittel EN-B'),
+        src: polarInfo.source, n: String(polarInfo.flights), from: kmh(polarInfo.fromKmh), to: kmh(polarInfo.windowToKmh) }) }}</span>
+    </p>
     <div class="cols">
       <div>
         <h3>{{ t('Gut gelaufen') }}</h3>
@@ -118,7 +151,10 @@ function pick(f: Finding, whole: boolean) {
 
 <style scoped>
 .review > h2 { padding-top: 18px; border-top: 1px solid var(--rule); margin-bottom: 6px; }
-.lead { margin: 0 0 18px; font-size: var(--fs-3); }
+.lead { margin: 0 0 10px; font-size: var(--fs-3); }
+.polar { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: 0 0 20px; font-size: var(--fs-1); }
+.polar label { display: flex; gap: 8px; align-items: center; color: var(--snow); }
+.polar select { max-width: 280px; }
 .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px 48px; }
 h3 { font-size: var(--fs-2); margin-bottom: 8px; }
 .cols > div:first-child h3 { color: var(--sky); }
