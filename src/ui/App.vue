@@ -121,7 +121,7 @@ function facts(a: ActivityRecord) {
         <button class="flights-btn" :aria-expanded="menuOpen" aria-controls="flight-menu" @click="menuOpen = !menuOpen">
           <span class="flights-label">{{ current?.title ?? t('Deine Flüge') }}</span>
           <span class="count" :aria-label="`${activities.length} ${t('Aktivitäten')}`">{{ activities.length }}</span>
-          <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 4.5 6 8.5 10 4.5" fill="none" stroke="currentColor" stroke-width="1.6" /></svg>
+          <span class="caret" aria-hidden="true" />
         </button>
         <nav v-if="menuOpen" id="flight-menu" class="menu" :aria-label="t('Aktivitäten')">
           <a v-for="a in activities" :key="a.id" :href="`#/a/${a.id}`" :aria-current="a.id === currentId ? 'page' : undefined">
@@ -132,7 +132,8 @@ function facts(a: ActivityRecord) {
         </nav>
       </div>
       <div class="top-actions">
-        <button class="primary" :disabled="importing" @click="fileInput?.click()">
+        <!-- on the start page the hero holds this action; in a flight the view has its own main action -->
+        <button v-if="currentId" :disabled="importing" @click="fileInput?.click()">
           {{ importing ? t('Analysiere …') : t('Track laden') }}
         </button>
         <span class="lang" role="group" aria-label="Sprache / language">
@@ -149,27 +150,30 @@ function facts(a: ActivityRecord) {
       <VideoView v-if="currentId && view === '3d'" :id="currentId" :key="`3d-${currentId}`" />
       <ActivityView v-else-if="currentId" :id="currentId" :key="currentId" />
       <section v-else class="welcome">
-        <div class="stage">
-          <video :src="demoVideo" :poster="demoPoster" autoplay muted loop playsinline preload="auto" aria-hidden="true" />
-          <div class="stage-text">
-            <h1>{{ t('Dein Flug, wie er war.') }}</h1>
-            <p>{{ t('Zieh deinen Track hierher. Du siehst den Flug in dem Gelände, über dem du geflogen bist, mit jeder Thermik und jeder Gleitstrecke. Aus demselben Track entsteht ein 3D-Video für Instagram oder YouTube.') }}</p>
-            <p class="stage-note">{{ t('Im Video: 81 km Strecke, 4 h 17 min Flug, in 30 Sekunden.') }}</p>
+        <div class="hero">
+          <div class="hero-text">
+            <p class="kicker">{{ t('Für Gleitschirm, Hike & Fly und Drachen') }}</p>
+            <h1>{{ t('Flüge auswerten und als 3D‑Video teilen') }}</h1>
+            <p class="sub">{{ t('IGC oder GPX hineinziehen: XC-Punkte, Thermiken und Gleitzahlen auf einen Blick. Das Video zeigt 81 km Streckenflug in 30 Sekunden.') }}</p>
+            <button class="primary hero-cta" :disabled="importing" @click="fileInput?.click()">
+              {{ importing ? t('Analysiere …') : t('Track laden') }}
+            </button>
+          </div>
+          <div class="hero-media">
+            <video :src="demoVideo" :poster="demoPoster" autoplay muted loop playsinline preload="auto" aria-hidden="true" />
           </div>
         </div>
 
-        <div class="intro">
-          <div class="drop" :class="{ over: dragging }" role="button" tabindex="0" :aria-label="t('Track laden')"
-            @click="fileInput?.click()" @keydown.enter.prevent="fileInput?.click()" @keydown.space.prevent="fileInput?.click()">
-            <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true">
-              <path d="M4 30 14 16l7 9 5-6 10 11" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
-              <path d="M20 4v13m-5-5 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" />
-            </svg>
-            <div>
-              <h2>{{ t('Track laden') }}</h2>
-              <p>{{ t('IGC aus dem Vario oder GPX von Uhr/Handy hierher ziehen oder klicken.') }}</p>
-              <p class="muted">{{ t('Hike & Fly: Aufstieg (GPX) und Flug (IGC) zusammen auswählen, oder eine Datei mit beidem.') }}</p>
-            </div>
+        <div class="more">
+          <div>
+            <h2>{{ t('Was die Auswertung zeigt') }}</h2>
+            <dl class="what">
+              <div><dt>{{ t('Auswertung') }}</dt><dd>{{ t('XC-Wertung nach XContest, FAI, FFVL und XC League; Thermiken mit Steigen und Versatz, Gleitstrecken mit Gleitzahl, Kreisdurchmesser, Querlage und Zentrieren.') }}</dd></div>
+              <div><dt>{{ t('Fahrt durch die Luft') }}</dt><dd>{{ t('Aus Grundgeschwindigkeit und Wind: Trimmfahrt, wann du beschleunigt hast und ob bei Gegenwind mehr als bei Rückenwind.') }}</dd></div>
+              <div><dt>{{ t('3D-Video') }}</dt><dd>{{ t('Hoch- oder Querformat. Sonnenstand mit Schatten, Wolkenbasis, weitere Piloten am selben Tag und Musik ohne GEMA lassen sich zuschalten.') }}</dd></div>
+              <div><dt>{{ t('Privat') }}</dt><dd>{{ t('Deine Tracks bleiben in deinem Browser. Nichts wird hochgeladen.') }}</dd></div>
+            </dl>
+            <p class="hint">{{ t('Dateien kannst du auch einfach auf die Seite ziehen. Für Hike & Fly den Aufstieg (GPX) und den Flug (IGC) zusammen auswählen.') }}</p>
           </div>
 
           <div v-if="activities.length" class="recent">
@@ -180,13 +184,6 @@ function facts(a: ActivityRecord) {
               </li>
             </ul>
           </div>
-
-          <dl class="what">
-            <div><dt>{{ t('Auswertung') }}</dt><dd>{{ t('XC-Wertung nach XContest, FAI, FFVL und XC League; Thermiken mit Steigen und Versatz, Gleitstrecken mit Gleitzahl, Kreisdurchmesser, Querlage und Zentrieren.') }}</dd></div>
-            <div><dt>{{ t('Fahrt durch die Luft') }}</dt><dd>{{ t('Aus Grundgeschwindigkeit und Wind: Trimmfahrt, wann du beschleunigt hast und ob bei Gegenwind mehr als bei Rückenwind.') }}</dd></div>
-            <div><dt>{{ t('3D-Video') }}</dt><dd>{{ t('Hoch- oder Querformat. Sonnenstand mit Schatten, Wolkenbasis, weitere Piloten am selben Tag und Musik ohne GEMA lassen sich zuschalten.') }}</dd></div>
-            <div><dt>{{ t('Privat') }}</dt><dd>{{ t('Deine Tracks bleiben in deinem Browser. Nichts wird hochgeladen.') }}</dd></div>
-          </dl>
         </div>
       </section>
     </main>
@@ -212,69 +209,73 @@ function facts(a: ActivityRecord) {
 <style scoped>
 .app { min-height: 100vh; display: flex; flex-direction: column; }
 
-/* top bar: name, flight switcher, one action */
+/* top bar: name, flight switcher, one action; opaque with a hairline */
 .top {
-  position: sticky; top: 0; z-index: 30; height: 56px; display: flex; align-items: center; gap: 16px;
-  padding: 0 20px; background: rgba(27, 36, 33, .94); border-bottom: 1px solid var(--rule);
-  backdrop-filter: blur(6px);
+  position: sticky; top: 0; z-index: var(--z-sticky); height: var(--nav); display: flex; align-items: center; gap: 16px;
+  padding: 0 20px; background: var(--ground); border-bottom: 1px solid var(--rule);
 }
-.mark { display: flex; align-items: center; gap: 9px; color: var(--snow); text-decoration: none; font-weight: 750; font-size: var(--fs-3); font-variation-settings: var(--wide); white-space: nowrap; }
+.mark { display: flex; align-items: center; gap: 9px; color: var(--snow); text-decoration: none; font-weight: var(--w-strong); font-size: var(--fs-3); font-variation-settings: var(--wide); white-space: nowrap; }
 .mark em { font-style: normal; color: var(--lift); }
-.mark-icon { flex: none; border-radius: 6px; }
+.mark-icon { flex: none; border-radius: var(--r-control); }
 .flights { position: relative; min-width: 0; flex: 0 1 360px; }
-.flights-btn { display: flex; align-items: center; gap: 8px; width: 100%; background: transparent; border-color: var(--rule); }
+.flights-btn { display: flex; align-items: center; gap: 8px; width: 100%; background: transparent; border-color: var(--rule); font-weight: var(--w-regular); }
 .flights-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; text-align: left; }
 .count { font-size: var(--fs-1); color: var(--lichen); }
+.caret { width: 7px; height: 7px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: translateY(-2px) rotate(45deg); flex: none; }
 .menu {
   position: absolute; top: calc(100% + 6px); left: 0; width: min(420px, calc(100vw - 32px)); max-height: 70vh; overflow: auto;
-  background: var(--ground-2); border: 1px solid var(--rule); border-radius: var(--radius); padding: 6px; z-index: 40;
-  box-shadow: 0 18px 40px rgba(0, 0, 0, .45);
+  background: var(--ground-2); border: 1px solid var(--rule); border-radius: var(--radius); padding: 6px; z-index: var(--z-dropdown);
+  box-shadow: 0 8px 8px rgba(13, 19, 17, .35);
 }
-.menu a { display: flex; flex-direction: column; padding: 8px 10px; border-radius: 4px; color: var(--snow); text-decoration: none; }
+.menu a { display: flex; flex-direction: column; padding: 8px 10px; border-radius: var(--r-control); color: var(--snow); text-decoration: none; }
 .menu a span { font-size: var(--fs-1); color: var(--lichen); }
 .menu a:hover { background: var(--ground-3); }
-.menu a[aria-current="page"] { box-shadow: inset 3px 0 var(--lift); }
+.menu a[aria-current="page"] { background: var(--ground-3); }
+.menu a[aria-current="page"] strong { color: var(--lift); }
 .empty { margin: 8px 10px; color: var(--lichen); }
-.scrim { position: fixed; inset: 0; z-index: 25; }
+.scrim { position: fixed; inset: 0; z-index: var(--z-scrim); }
 .top-actions { margin-left: auto; display: flex; align-items: center; gap: 10px; }
 .lang { display: flex; }
-.lang button { padding: 4px 8px; font-size: var(--fs-1); background: transparent; border-color: var(--rule); border-radius: 0; }
-.lang button:first-child { border-radius: 4px 0 0 4px; }
-.lang button:last-child { border-radius: 0 4px 4px 0; border-left: none; }
+.lang button { min-height: 32px; padding: 0 9px; font-size: var(--fs-1); background: transparent; border-color: var(--rule); border-radius: 0; }
+.lang button:first-child { border-radius: var(--r-control) 0 0 var(--r-control); }
+.lang button:last-child { border-radius: 0 var(--r-control) var(--r-control) 0; border-left: none; }
 .lang button[aria-pressed="true"] { background: var(--snow); color: var(--ground); border-color: var(--snow); }
 
 main { flex: 1; min-width: 0; }
 .error { color: #ff9b8a; margin: 16px 20px; }
 
-/* welcome: the demo flight is the stage, text sits in the sky */
-.stage { position: relative; height: min(72vh, 680px); overflow: hidden; background: #000; }
-.stage video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.stage-text {
-  position: absolute; left: 0; right: 0; bottom: 0; padding: 120px max(20px, calc((100vw - 1120px) / 2)) 32px;
-  background: linear-gradient(to top, rgba(27, 36, 33, .92), rgba(27, 36, 33, 0));
+/* start page: the first screen holds what it is, for whom, one fact and the main action;
+   the demo flight plays beside it */
+.hero {
+  min-height: calc(100dvh - var(--nav)); max-width: 1280px; margin: 0 auto; padding: 64px 24px;
+  display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 24px; align-items: center;
 }
-.stage-text h1 { font-size: var(--fs-5); line-height: 1.05; max-width: 22ch; text-wrap: balance; }
-.stage-text p { max-width: 58ch; margin: 12px 0 0; font-size: var(--fs-3); }
-.stage-text .stage-note { font-size: var(--fs-1); color: var(--lichen); }
+.hero-text { grid-column: 1 / span 5; }
+.hero-media { grid-column: 6 / -1; }
+.kicker { margin: 0 0 16px; color: var(--lichen); font-size: var(--fs-2); }
+.hero h1 { font-size: var(--fs-display); line-height: 1.08; letter-spacing: -0.02em; font-variation-settings: normal; }
+.sub { margin: 20px 0 32px; max-width: 46ch; font-size: var(--fs-3); color: var(--snow); }
+.hero-cta { min-height: 48px; padding: 0 28px; font-size: var(--fs-2); }
+.hero-media video {
+  display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--radius); background: var(--night);
+}
 
-.intro { max-width: 1120px; margin: 0 auto; padding: 32px 20px 48px; display: grid; grid-template-columns: 1fr 1fr; gap: 40px 56px; }
-.drop {
-  grid-column: 1 / -1; display: flex; gap: 20px; align-items: center; padding: 28px; cursor: pointer;
-  border: 1.5px dashed var(--control-line); border-radius: var(--radius); color: var(--lift);
+.more {
+  max-width: 1280px; margin: 0 auto; padding: 72px 24px 96px; border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 24px;
 }
-.drop:hover, .drop.over { border-color: var(--lift); background: var(--ground-2); }
-.drop h2 { color: var(--snow); font-size: var(--fs-4); }
-.drop p { margin: 4px 0 0; color: var(--snow); }
-.drop p.muted { color: var(--lichen); }
-.recent h2, .what dt { font-size: var(--fs-3); }
-.recent ul { list-style: none; padding: 0; margin: 12px 0 0; }
-.recent li { border-top: 1px solid var(--rule); }
+.more > div:first-child { grid-column: 1 / span 7; }
+.recent { grid-column: 9 / -1; }
+.more h2 { margin-bottom: 24px; }
+.what { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 28px 32px; }
+.what dt { font-size: var(--fs-3); font-weight: var(--w-strong); font-variation-settings: var(--wide); }
+.what dd { margin: 6px 0 0; color: var(--lichen); max-width: 46ch; }
+.hint { margin: 32px 0 0; color: var(--lichen); max-width: 65ch; }
+.recent ul { list-style: none; padding: 0; margin: 0; }
+.recent li + li { border-top: 1px solid var(--rule); }
 .recent a { display: block; padding: 10px 0; color: var(--snow); text-decoration: none; }
-.recent a:hover strong { text-decoration: underline; }
-.what { margin: 0; display: grid; gap: 18px; }
-.recent + .what { grid-column: 2; }
-.what dt { font-weight: 700; font-variation-settings: var(--wide); }
-.what dd { margin: 4px 0 0; color: var(--lichen); max-width: 52ch; }
+.recent a strong { display: block; }
+.recent a:hover strong { color: var(--lift); }
 
 .foot {
   display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; padding: 18px 20px 24px;
@@ -286,30 +287,37 @@ main { flex: 1; min-width: 0; }
 button.link { background: none; border: none; padding: 0; color: var(--lichen); text-decoration: underline; cursor: pointer; font-size: var(--fs-1); min-height: 0; }
 
 .consent {
-  position: fixed; left: 16px; right: 16px; bottom: 16px; max-width: 560px; margin: 0 auto; z-index: 100;
-  padding: 16px; display: flex; flex-direction: column; gap: 12px; font-size: 14px;
-  background: var(--ground-2); border: 1px solid var(--rule); border-radius: var(--radius); box-shadow: 0 8px 30px rgba(0, 0, 0, .5);
+  position: fixed; left: 16px; right: 16px; bottom: 16px; max-width: 560px; margin: 0 auto; z-index: var(--z-modal);
+  padding: 16px; display: flex; flex-direction: column; gap: 12px; font-size: var(--fs-2);
+  background: var(--ground-2); border: 1px solid var(--control-line); border-radius: var(--radius); box-shadow: 0 8px 8px rgba(13, 19, 17, .4);
 }
 .consent p { margin: 0; }
 .consent-buttons { display: flex; gap: 8px; justify-content: flex-end; }
 .drag-overlay {
-  position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; font-size: var(--fs-4); font-weight: 700;
+  position: fixed; inset: 0; z-index: var(--z-overlay); display: grid; place-items: center; font-size: var(--fs-4); font-weight: var(--w-strong);
   background: rgba(27, 36, 33, .85); border: 3px dashed var(--lift); pointer-events: none;
 }
 
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .hero-text { grid-column: 1 / span 6; }
+  .hero-media { grid-column: 7 / -1; }
+}
+@media (max-width: 1023px) {
+  .hero { min-height: 0; padding: 40px 20px 48px; gap: 32px; }
+  .hero-text, .hero-media { grid-column: 1 / -1; }
+  .more { padding: 48px 20px 72px; }
+  .more > div:first-child, .recent { grid-column: 1 / -1; }
+}
 @media (max-width: 800px) {
   .top { gap: 10px; padding: 0 12px; }
   .mark span { display: none; }
   .flights { flex: 1; }
   .top-actions { gap: 6px; }
-  /* the landscape video stays whole on a phone; the text moves below it */
-  .stage { height: auto; background: var(--ground); }
-  .stage video { position: static; height: auto; aspect-ratio: 16 / 9; }
-  .stage-text { position: static; padding: 20px 16px 4px; background: none; }
-  .stage-text p { font-size: var(--fs-2); }
-  .intro { grid-template-columns: 1fr; padding: 24px 16px 40px; gap: 32px; }
-  .recent + .what { grid-column: auto; }
-  .drop { padding: 20px; align-items: flex-start; }
+  .hero { padding: 28px 16px 40px; }
+  .what { grid-template-columns: 1fr; gap: 20px; }
   .version { margin-left: 0; }
+}
+@media (max-width: 640px) {
+  .hero-cta { width: 100%; }
 }
 </style>

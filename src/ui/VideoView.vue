@@ -574,9 +574,9 @@ onUnmounted(() => {
           <button @click="fullscreen = !fullscreen">{{ fullscreen ? t('Schliessen') : t('Vollbild') }}</button>
         </div>
         <div v-if="plan" class="style-switch seg" role="group" :aria-label="t('Darstellung im Flug')">
-          <button :class="{ active: opt.pilotStyle === 'glider' }" :disabled="exporting" @click="opt.pilotStyle = 'glider'">🪂 {{ t('Schirm') }}</button>
-          <button :class="{ active: opt.pilotStyle === 'firefly' }" :disabled="exporting" @click="opt.pilotStyle = 'firefly'">✨ {{ t('Glühwürmchen') }}</button>
-          <button :class="{ active: opt.pilotStyle === 'both' }" :disabled="exporting" @click="opt.pilotStyle = 'both'">🪂✨ {{ t('Beides') }}</button>
+          <button :class="{ active: opt.pilotStyle === 'glider' }" :disabled="exporting" @click="opt.pilotStyle = 'glider'">{{ t('Schirm') }}</button>
+          <button :class="{ active: opt.pilotStyle === 'firefly' }" :disabled="exporting" @click="opt.pilotStyle = 'firefly'">{{ t('Glühwürmchen') }}</button>
+          <button :class="{ active: opt.pilotStyle === 'both' }" :disabled="exporting" @click="opt.pilotStyle = 'both'">{{ t('Beides') }}</button>
         </div>
         <div v-if="videoUrl && !fullscreen" class="result panel" :class="{ stale: outdated }">
           <p v-if="outdated" class="stale-note">
@@ -786,7 +786,7 @@ onUnmounted(() => {
 .head h1 { font-size: 26px; margin-top: 4px; }
 .body { display: grid; grid-template-columns: 1fr 340px; gap: 20px; align-items: start; }
 .stage { display: flex; flex-direction: column; align-items: center; gap: 12px; min-width: 0; position: relative; }
-.stage.full { position: fixed; inset: 0; z-index: 50; background: #000; justify-content: center; padding: 0 16px; }
+.stage.full { position: fixed; inset: 0; z-index: var(--z-fullscreen); background: var(--night); justify-content: center; padding: 0 16px; }
 .preview { border-radius: var(--radius); background: #000; display: block; }
 .preview.hidden { visibility: hidden; height: 0; }
 .progress { padding: 24px; width: min(420px, 100%); display: flex; flex-direction: column; gap: 10px; text-align: center; }
@@ -801,7 +801,7 @@ onUnmounted(() => {
 .stale-note { margin: 0; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: center; color: #ffca28; font-size: 14px; text-align: center; }
 .settings { padding: 16px; display: flex; flex-direction: column; gap: 14px; position: sticky; top: 72px; min-width: 0; }
 fieldset { border: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
-legend { font-size: var(--fs-2); font-weight: 700; font-variation-settings: var(--wide); color: var(--snow); margin-bottom: 8px; }
+legend { font-size: var(--fs-3); font-weight: var(--w-strong); font-variation-settings: var(--wide); color: var(--snow); margin-bottom: 8px; }
 label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
 label.check { flex-direction: row; align-items: flex-start; gap: 8px; }
 label input[type=range] { accent-color: var(--accent); }
@@ -812,10 +812,10 @@ label input[type=range] { accent-color: var(--accent); }
 .pair { display: flex; gap: 8px; }
 .pair input { flex: 1; min-width: 0; }
 .colors { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.colors label { font-size: 12px; color: var(--muted); }
+.colors label { font-size: var(--fs-1); color: var(--muted); }
 .colors input[type=color] { width: 100%; height: 28px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: none; cursor: pointer; }
-button.link { background: none; border: none; padding: 0 4px; color: var(--accent); cursor: pointer; font-size: 12px; }
-.small { font-size: 12px; margin: 0; }
+button.link { background: none; border: none; padding: 0 4px; color: var(--accent); cursor: pointer; font-size: var(--fs-1); }
+.small { font-size: var(--fs-1); margin: 0; }
 .others { display: flex; flex-direction: column; gap: 8px; max-height: 260px; overflow-y: auto; }
 .other { display: flex; flex-direction: column; gap: 6px; }
 .other-opts { display: flex; gap: 8px; padding-left: 24px; }

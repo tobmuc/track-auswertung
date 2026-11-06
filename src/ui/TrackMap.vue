@@ -282,7 +282,7 @@ onMounted(() => {
     map.addLayer({ id: 'score-line', type: 'line', source: 'score', filter: ['==', '$type', 'LineString'],
       paint: { 'line-color': '#ffffff', 'line-width': 2, 'line-dasharray': [2, 2], 'line-opacity': 0.9 } });
     map.addLayer({ id: 'track-casing', type: 'line', source: 'track', filter: ['!has', 'connector'],
-      layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#000', 'line-width': 5, 'line-opacity': 0.45 } });
+      layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#0d1311', 'line-width': 5, 'line-opacity': 0.45 } });
     map.addLayer({ id: 'track-line', type: 'line', source: 'track', filter: ['!has', 'connector'],
       layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': ['get', 'c'], 'line-width': 3 } });
     map.addLayer({ id: 'connector', type: 'line', source: 'track', filter: ['has', 'connector'],
@@ -291,7 +291,7 @@ onMounted(() => {
       paint: { 'circle-radius': ['interpolate', ['linear'], ['get', 'gain'], 30, 4, 1000, 12], 'circle-color': '#ffb300',
         'circle-opacity': 0.35, 'circle-stroke-color': '#ffb300', 'circle-stroke-width': 1.5 } });
     map.addLayer({ id: 'tp', type: 'circle', source: 'score', filter: ['==', '$type', 'Point'],
-      paint: { 'circle-radius': 6, 'circle-color': '#fff', 'circle-stroke-color': '#000', 'circle-stroke-width': 2 } });
+      paint: { 'circle-radius': 6, 'circle-color': '#fff', 'circle-stroke-color': '#0d1311', 'circle-stroke-width': 2 } });
     map.addLayer({ id: 'ends', type: 'circle', source: 'ends',
       paint: { 'circle-radius': 7, 'circle-color': ['match', ['get', 'kind'], 'hike', '#8bc34a', '#ff8a3d'],
         'circle-stroke-color': '#fff', 'circle-stroke-width': 2 } });
@@ -355,7 +355,7 @@ function applyTerrain(on: boolean) {
 .controls button { padding: 4px 10px; font-size: 13px; background: rgba(27, 36, 33, .82); border-color: rgba(241, 240, 234, .28); backdrop-filter: blur(4px); }
 .controls button.active { background: var(--snow); color: var(--ground); border-color: var(--snow); }
 :global(.hover-dot) {
-  width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 3px solid var(--accent);
+  width: 14px; height: 14px; border-radius: 50%; background: var(--snow); border: 3px solid var(--accent);
   box-shadow: 0 0 0 3px rgba(0, 0, 0, .35);
 }
 @media (max-width: 800px) {

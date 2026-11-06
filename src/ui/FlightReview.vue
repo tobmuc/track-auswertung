@@ -34,7 +34,7 @@ function clockOf(f: Finding) {
   const tl = props.result.timeline.t;
   const a = tl[Math.min(tl.length - 1, offset.value + f.start)];
   const b = tl[Math.min(tl.length - 1, offset.value + f.end)];
-  return `${F.clock(a, tz.value)}–${F.clock(b, tz.value)}`;
+  return `${F.clock(a, tz.value)}-${F.clock(b, tz.value)}`;
 }
 
 /** Title and sentence for one finding; numbers come straight from the measured values */

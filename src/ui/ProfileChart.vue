@@ -206,7 +206,7 @@ onUnmounted(() => ro?.disconnect());
 canvas { display: block; }
 .tip {
   position: absolute; top: 4px; transform: translateX(-50%); pointer-events: none; white-space: nowrap;
-  display: flex; gap: 8px; padding: 3px 8px; border-radius: 6px; font-size: 12px;
+  display: flex; gap: 8px; padding: 3px 8px; border-radius: var(--r-control); font-size: var(--fs-1);
   background: rgba(27, 36, 33, .94); border: 1px solid var(--rule);
 }
 </style>

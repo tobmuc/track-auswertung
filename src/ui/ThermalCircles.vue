@@ -46,7 +46,7 @@ const kpis = computed(() => {
     [t('Ø Steigen im Kreis'), F.vario(meanOf(cs, (c) => c.climb)), `${t('bester Kreis')} ${F.vario(cs.length ? Math.max(...cs.map((c) => c.climb)) : null)}`],
     [
       t('Zentriert nach'),
-      done.length ? `${F.num(median(done.map((c) => c.centredAfterS!)))} s` : '–',
+      done.length ? `${F.num(median(done.map((c) => c.centredAfterS!)))} s` : '-',
       done.length ? `${t('Median')}, ${t('Kreis')} ${F.num(median(done.map((c) => c.centredTurn!)))}` : '',
     ],
   ];
@@ -149,7 +149,7 @@ function draw(id: ChartId, g: CanvasRenderingContext2D, W: number, H: number) {
       g.fillStyle = 'rgba(255,255,255,.07)';
       g.fillRect(x(bs.lo), b.y, x(bs.lo + 10) - x(bs.lo), b.h);
       const right = x(bs.lo + 10) + 150 < W;
-      label(g, `${t('bestes Steigen')} ${nf0(bs.lo)}–${nf0(bs.lo + 10)} m`, right ? x(bs.lo + 10) + 4 : x(bs.lo) - 4, b.y + 10, right ? 'left' : 'right', TEXT);
+      label(g, `${t('bestes Steigen')} ${nf0(bs.lo)}-${nf0(bs.lo + 10)} m`, right ? x(bs.lo + 10) + 4 : x(bs.lo) - 4, b.y + 10, right ? 'left' : 'right', TEXT);
     }
     for (const c of cs) {
       g.fillStyle = c.dir < 0 ? LEFT : RIGHT;
@@ -327,7 +327,7 @@ function savePng(id: ChartId) {
       <figure v-for="c in charts" :key="c.id" :class="['chart', c.id]">
         <figcaption>
           <strong>{{ t(c.title) }}</strong>
-          <button class="png" :title="t('Diagramm als PNG speichern')" :aria-label="`${t('Diagramm als PNG speichern')}: ${t(c.title)}`" @click="savePng(c.id)">⤓ PNG</button>
+          <button class="png" :title="t('Diagramm als PNG speichern')" :aria-label="`${t('Diagramm als PNG speichern')}: ${t(c.title)}`" @click="savePng(c.id)">{{ t('PNG speichern') }}</button>
         </figcaption>
         <div :ref="(el) => { if (el) boxes[c.id] = el as HTMLDivElement }" class="cbox">
           <canvas role="img" :aria-label="`${t(c.title)}: ${t(c.hint)}`" :ref="(el) => { if (el) canvases[c.id] = el as HTMLCanvasElement }" />
@@ -345,16 +345,16 @@ function savePng(id: ChartId) {
 <style scoped>
 .circles > h2 { padding-top: 18px; border-top: 1px solid var(--rule); margin-bottom: 18px; }
 .ckpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 16px 32px; margin-bottom: 28px; }
-.ckpi .value { font-size: 28px; font-weight: 700; line-height: 1.1; font-variation-settings: 'wdth' 125; }
+.ckpi .value { font-size: var(--fs-5); font-weight: var(--w-strong); line-height: 1.1; font-variation-settings: 'wdth' 125; }
 .ckpi .name { font-size: var(--fs-2); margin-top: 2px; }
 .ckpi .sub { font-size: var(--fs-1); }
 .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr)); gap: 20px 26px; }
 .chart { margin: 0; min-width: 0; }
 .chart.centre { grid-column: 1 / -1; }
 figcaption { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 14px; }
-.png { padding: 2px 9px; font-size: 12px; }
+.png { min-height: 32px; padding: 0 10px; font-size: var(--fs-1); }
 .cbox { width: 100%; }
 canvas { display: block; }
-.hint { font-size: 12px; margin: 4px 0 0; }
+.hint { font-size: var(--fs-1); margin: 4px 0 0; }
 .note { font-size: 13px; color: var(--muted); margin: 16px 0 0; }
 </style>

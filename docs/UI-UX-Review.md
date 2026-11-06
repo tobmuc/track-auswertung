@@ -148,3 +148,56 @@ Gemeinsam für alle drei:
 | [emilkowalski/skills](https://github.com/emilkowalski/skills) | 54 k | MIT | Feinschliff für Interaktion und Animation |
 | [jakubkrehel/make-interfaces-feel-better](https://github.com/jakubkrehel/make-interfaces-feel-better) | 4 k | MIT | Kleine Details, die eine Oberfläche hochwertig wirken lassen |
 | [vercel-labs/web-interface-guidelines](https://github.com/vercel-labs/web-interface-guidelines) | 1 k | MIT | Prüfliste für Web-Oberflächen (Fokus, Formulare, Zahlen, Ladezustände) |
+
+## Überarbeitung nach dem Skill design-taste (v0.7.0)
+
+Grundlage: [h3nryprod01/design-taste](https://github.com/h3nryprod01/design-taste) v2.1.0 (SKILL.md und
+`reference/*.md`). Design Read und Regler stehen in [DESIGN.md](../DESIGN.md). Modus: Operate für Dashboard
+und 3D-Video, Persuade (zurückhaltend) für den ersten Bildschirm der Startseite. Redesign-Art: bewahren
+(Navigation, Begriffe, Rechtstexte und Consent unverändert).
+
+| Vorher | Nachher | Warum |
+|---|---|---|
+| Startseite: Video-Bühne 72vh mit Text auf Verlauf, Ablagefläche schaut unten herein | Erster Bildschirm genau 100dvh minus Kopfleiste, Text links, Video rechts, darunter Haarlinie und ruhiger Abschnitt | Hero füllt den Bildschirm, nichts vom nächsten Abschnitt ragt hinein; keine Schrift über bewegtem Bild |
+| h1 „Dein Flug, wie er war.“ | „Flüge auswerten und als 3D-Video teilen“ mit Hinweis „Für Gleitschirm, Hike & Fly und Drachen“ | Überschrift nennt, was es ist, der Hinweis für wen; kein Slogan |
+| Unterzeile 40 Wörter plus Bildunterschrift „Im Video: …“ | Unterzeile 20 Wörter mit der Zahl „81 km Streckenflug in 30 Sekunden“ | Persuade: höchstens 20 Wörter, keine Captions an Bildern |
+| Hauptaktion nur in der Kopfleiste und in einer gestrichelten Ablagefläche | Ein Button „Track laden“ im ersten Bildschirm; Kopfleiste ohne zweiten Aufruf; Ablegen auf der ganzen Seite bleibt | Hauptaktion ohne Scrollen sichtbar, kein doppelter Aufruf |
+| Gewichte 400 bis 750 gemischt | 400 / 500 / 600 als Tokens | Hierarchie aus Grösse und wenig Gewichtsstufen |
+| Skala 13/15/18/24/40, h3 so gross wie Text, Einzelwerte 10, 12, 34 px | Feste Stufen 13/16/19/23/28 und eine fliessende Display-Grösse | Operate: feste Stufen im Verhältnis 1,2, nichts unter 13 px |
+| Buttons 27-34 px, Hover hellt auf, kein Klick-Feedback | 36 px, Hauptaktion 40 px (Startseite 48), Touch 44 px; Hover nur mit Maus, Klick `scale(0.97)`, 150 ms ease-out | Alle Zustände sichtbar, Bewegung kurz und nur als Rückmeldung |
+| Kopfleiste halbtransparent mit Blur | Opak mit Haarlinie | Ruhige Navigation, kein Glas-Effekt |
+| Gedankenstriche als Platzhalter und in Zeitspannen („12:21–16:38“, „–“) | Bindestrich („12:21-16:38“, „-“) | Keine U+2013/U+2014 im sichtbaren Text |
+| Emoji in den Darstellungsknöpfen (🪂, ✨) und „⤓ PNG“ | Nur Text: „Schirm“, „Glühwürmchen“, „Beides“, „PNG speichern“ | Keine Emoji, Buttons als Verb und Ding |
+| Gezeichneter Pfeil (SVG) im Flug-Menü, Seitenstreifen am gewählten Flug | CSS-Winkel; gewählter Flug mit getönter Fläche und gelbem Titel | Keine selbstgezeichneten Icons, keine Seitenstreifen |
+| „Löschen“ | „Flug löschen“ | Verb und Ding |
+| `#000`/`#fff` an Video-Rahmen und Kartenmarken | `--night` `#0d1311`, `--snow` | Kein reines Schwarz oder Weiss |
+| Zahlen-z-index (25, 30, 40, 50, 90, 100) im Code verteilt | Tokens `--z-*` | Semantische Ebenen statt Zauberzahlen |
+
+### Pre-Flight
+
+Das Prüfskript des Skills (`scripts/preflight.mjs`) lag nicht vor; geprüft wurde von Hand im Browser bei
+1440, 1024, 768 und 375 px sowie per Messung im DOM.
+
+| Punkt | Ergebnis |
+|---|---|
+| Modus, Design Read, Regler erklärt | ja, DESIGN.md |
+| Keine U+2013/U+2014 im sichtbaren Text | 0 Treffer im Dashboard (`document.body.innerText`) und im Quelltext ausserhalb von Kommentaren |
+| Thema, Akzent und Radius festgelegt | ein dunkles Thema mit Begründung, ein Akzent, Radius 6/8 px |
+| Kontrast AA | Text 7,4:1 und mehr, Button-Text auf Gelb dunkel |
+| Typo-Disziplin | Hero-Überschrift 2 Zeilen bei 1440, 1024, 768 (1 Zeile) und 375 px; keine Button-Beschriftung bricht um |
+| Bewegung | nur Farbe und Klick, 150 ms, reduziert ohne Transform |
+| Responsive | Startseite einspaltig unter 1024 px, kein Querscrollen bei 375 px, Hero mit `dvh` |
+| Zustände | Hover, Fokus, Klick, deaktiviert, Laden („Analysiere …“) vorhanden |
+| Keine falschen Bilder | echtes Demo-Video, keine Platzhalter; Logo bleibt als Marke |
+| Keine KI-Merkmale | keine Grossbuchstaben-Eyebrows, keine Emoji, keine Seitenstreifen, keine Glas-Kopfleiste |
+
+### Bewusste Abweichungen
+
+- Die Kartenknöpfe über der Karte bleiben auf dem Desktop kompakter als 44 px (Touch-Geräte: 44 px).
+- Die Anzeige auf der Karte (Titel und Messwerte über einem Verlauf) bleibt: Operate erlaubt Schrift über
+  Bildern mit Hinterlegung, und die Karte ist hier das Werkzeug.
+- Kein heller Modus: ein festes dunkles Thema, begründet in DESIGN.md.
+- Dichte Definitionslisten mit Haarlinie je Zeile im Dashboard sind für Operate richtig; die Persuade-Regel
+  gegen Linien in Spezifikationstabellen gilt dort nicht.
+- Texte im 3D-Video (HUD auf dem Canvas) folgen den Regeln für fehlende Werte, ihre Gestaltung ist Teil
+  des Videos und wurde nicht neu gesetzt.

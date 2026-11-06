@@ -91,9 +91,9 @@ label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color:
 label.grow { flex: 1; min-width: 220px; }
 .key { display: flex; gap: 6px; }
 .key input { flex: 1; min-width: 0; }
-.small { font-size: 12px; margin: 0; }
+.small { font-size: var(--fs-1); margin: 0; }
 .files { margin: 0; padding-left: 18px; font-size: 13px; }
-button.link { background: none; border: none; padding: 0 4px; color: var(--accent); cursor: pointer; font-size: 12px; }
+button.link { background: none; border: none; padding: 0 4px; color: var(--accent); cursor: pointer; font-size: var(--fs-1); }
 .warn { color: #ffca28; }
 .error { color: #ff6b6b; }
 </style>

@@ -207,7 +207,7 @@ export function drawHud(g: CanvasRenderingContext2D, W: number, H: number, m: Mo
         g.fillText(r.name, pad + 46 * S, y, bw * 0.55);
         g.textAlign = 'right';
         g.fillStyle = r.alt == null ? '#8b98a8' : '#fff';
-        g.fillText(r.alt == null ? '–' : `${num(r.alt)} m`, pad + bw - 18 * S, y);
+        g.fillText(r.alt == null ? '-' : `${num(r.alt)} m`, pad + bw - 18 * S, y);
         g.textAlign = 'left';
       });
     }

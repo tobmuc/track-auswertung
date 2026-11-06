@@ -97,7 +97,7 @@ const places = computed(() => {
   if (!r) return '';
   const parts: string[] = [];
   if (r.hike) parts.push(`${t('Aufstieg')} ${F.dur(r.hike.durationS)}`);
-  if (r.flight) parts.push(`${t('Flug')} ${F.clock(r.flight.launchTime, tz.value)}–${F.clock(r.flight.landingTime, tz.value)}`);
+  if (r.flight) parts.push(`${t('Flug')} ${F.clock(r.flight.launchTime, tz.value)}-${F.clock(r.flight.landingTime, tz.value)}`);
   return parts.join(', ');
 });
 
@@ -158,7 +158,7 @@ const circleRows = computed<[string, string][]>(() => {
     [t('Ø Kreisdurchmesser'), F.m(meanOf(cs, (c) => 2 * c.radiusM))],
     [t('Ø Querlage'), `${F.num(meanOf(cs, (c) => c.bankDeg))}°`],
     [t('Ø Steigen im Kreis'), F.vario(meanOf(cs, (c) => c.climb))],
-    [t('Zentriert nach (Median)'), done.length ? `${F.num(done[done.length >> 1])} s` : '–'],
+    [t('Zentriert nach (Median)'), done.length ? `${F.num(done[done.length >> 1])} s` : '-'],
   ];
 });
 
@@ -166,7 +166,7 @@ const flightGroups = computed<Group[]>(() => {
   const f = flight.value;
   const s = res.value?.score;
   if (!f) return [];
-  const wind = f.wind ? `${compass(f.wind.fromDeg)} ${F.num(f.wind.speedKmh)} km/h` : '–';
+  const wind = f.wind ? `${compass(f.wind.fromDeg)} ${F.num(f.wind.speedKmh)} km/h` : '-';
   const thermalGain = gainSum(f.thermals);
   const best = bestGlide(res.value?.segments.flatMap((sg) => sg.glides) ?? []);
   const maxW = maxWind(f.thermals);
@@ -198,7 +198,7 @@ const flightGroups = computed<Group[]>(() => {
     {
       title: t('Speed & Gleiten'),
       rows: [[t('Ø Speed'), F.kmh(f.avgSpeedKmh)], [t('Max. Speed'), F.kmh(f.maxSpeedKmh)], [t('Ø Gleitzahl (Gleitphasen)'), F.glide(f.avgGlideRatio)], [t('Beste Gleitzahl (60 s)'), F.glide(f.bestGlide60s)],
-        [t('Bestes Gleiten'), best ? `${F.glide(best.ratio)}, ${F.km(best.distanceKm, 1)}` : '–']],
+        [t('Bestes Gleiten'), best ? `${F.glide(best.ratio)}, ${F.km(best.distanceKm, 1)}` : '-']],
     },
     {
       title: t('Vario'),
@@ -212,9 +212,9 @@ const flightGroups = computed<Group[]>(() => {
     },
     {
       title: t('Kreisen'),
-      rows: [[t('Kreise links / rechts'), `${f.circlesLeft} / ${f.circlesRight}`], [t('Kreisen links | rechts'), leftPct == null ? '–' : `${leftPct} % | ${100 - leftPct} %`],
-        [t('Thermiken'), String(f.thermals.length)], [t('Ø Zeit pro Kreis'), f.avgTimePerCircleS ? `${F.num(f.avgTimePerCircleS)} s` : '–'], [t('Wind (aus Kreisen)'), wind],
-        [t('Max. Wind'), maxW ? `${compass(maxW.fromDeg)} ${F.num(maxW.speedKmh)} km/h` : '–'],
+      rows: [[t('Kreise links / rechts'), `${f.circlesLeft} / ${f.circlesRight}`], [t('Kreisen links | rechts'), leftPct == null ? '-' : `${leftPct} % | ${100 - leftPct} %`],
+        [t('Thermiken'), String(f.thermals.length)], [t('Ø Zeit pro Kreis'), f.avgTimePerCircleS ? `${F.num(f.avgTimePerCircleS)} s` : '-'], [t('Wind (aus Kreisen)'), wind],
+        [t('Max. Wind'), maxW ? `${compass(maxW.fromDeg)} ${F.num(maxW.speedKmh)} km/h` : '-'],
         ...circleRows.value],
     },
     ...(f.airspeed
@@ -225,8 +225,8 @@ const flightGroups = computed<Group[]>(() => {
             [t('Max. Fahrt (20 s)'), F.kmh(f.airspeed.max20sKmh, 0)],
             [t('Beschleunigt'), `${F.dur(f.airspeed.acceleratedS)} (${F.pct(f.airspeed.acceleratedS, f.airspeed.evaluatedS)} ${t('des Geradeausflugs')})`],
             [t('Beschleunigte Phasen'), `${f.airspeed.phases.length}, ${t('längste')} ${F.dur(Math.max(0, ...f.airspeed.phases.map((p) => p.durationS)))}`],
-            [t('Beschleunigt bei Gegenwind'), f.airspeed.accelShareHeadwind == null ? '–' : `${Math.round(f.airspeed.accelShareHeadwind * 100)} %`],
-            [t('Beschleunigt bei Rückenwind'), f.airspeed.accelShareTailwind == null ? '–' : `${Math.round(f.airspeed.accelShareTailwind * 100)} %`],
+            [t('Beschleunigt bei Gegenwind'), f.airspeed.accelShareHeadwind == null ? '-' : `${Math.round(f.airspeed.accelShareHeadwind * 100)} %`],
+            [t('Beschleunigt bei Rückenwind'), f.airspeed.accelShareTailwind == null ? '-' : `${Math.round(f.airspeed.accelShareTailwind * 100)} %`],
           ] as [string, string][],
         }]
       : []),
@@ -262,11 +262,11 @@ const thermalCircles = computed(() => {
 });
 function circleCell(th: object) {
   const c = thermalCircles.value.get(th);
-  return c ? `${F.num(2 * c.meanRadiusM)} m, ${F.num(c.meanBankDeg)}°` : '–';
+  return c ? `${F.num(2 * c.meanRadiusM)} m, ${F.num(c.meanBankDeg)}°` : '-';
 }
 function centredCell(th: object) {
   const c = thermalCircles.value.get(th);
-  return c?.centredAfterS != null ? `${F.num(c.centredAfterS)} s` : '–';
+  return c?.centredAfterS != null ? `${F.num(c.centredAfterS)} s` : '-';
 }
 
 const glides = computed(() => res.value?.segments.flatMap((s) => s.glides).filter((g) => g.distanceKm >= 1) ?? []);
@@ -340,7 +340,7 @@ watch(() => props.id, load);
         <option :value="true">UTC</option>
       </select>
       <a class="btn primary video-btn" :href="`#/a/${id}/3d`">{{ t('3D-Video erstellen') }}</a>
-      <button @click="remove">{{ t('Löschen') }}</button>
+      <button @click="remove">{{ t('Flug löschen') }}</button>
     </div>
 
     <FlightReview v-if="res.flight" class="wrap" :result="res" :polar-id="rec.polar?.id ?? ''" @select="showAt" @polar="(id) => update({ polar: id ? { id } : undefined })" />
@@ -444,8 +444,8 @@ watch(() => props.id, load);
               <td class="strong">{{ g.ratio != null ? F.glide(g.ratio) : t('Höhe gewonnen') }}</td>
               <td>{{ F.glide(g.airRatio) }}</td>
               <td>{{ F.kmh(g.avgSpeedKmh, 0) }}</td>
-              <td :class="{ accel: g.airKmh != null && flight?.airspeed && g.airKmh >= flight.airspeed.trimKmh + ACCEL_DELTA_KMH }">{{ g.airKmh != null ? F.kmh(g.airKmh, 0) : '–' }}</td>
-              <td>{{ g.windAlongKmh != null ? F.signed(g.windAlongKmh, 'km/h') : '–' }}</td>
+              <td :class="{ accel: g.airKmh != null && flight?.airspeed && g.airKmh >= flight.airspeed.trimKmh + ACCEL_DELTA_KMH }">{{ g.airKmh != null ? F.kmh(g.airKmh, 0) : '-' }}</td>
+              <td>{{ g.windAlongKmh != null ? F.signed(g.windAlongKmh, 'km/h') : '-' }}</td>
               <td>{{ F.vario(g.avgVario) }}</td>
             </tr>
           </tbody>
@@ -465,9 +465,9 @@ watch(() => props.id, load);
             <td>{{ F.signed(th.gain, 'm') }}</td>
             <td>{{ F.vario(th.avgClimb) }}</td>
             <td>{{ F.dur(th.durationS) }}</td>
-            <td>{{ th.wind ? `${compass(th.wind.fromDeg)} ${F.num(th.wind.speedKmh)} km/h` : '–' }}</td>
-            <td>{{ th.drift ? `${compass(th.drift.fromDeg)} ${F.num(th.drift.speedKmh)} km/h` : '–' }}</td>
-            <td>{{ coreOffset(th) ?? '–' }}</td>
+            <td>{{ th.wind ? `${compass(th.wind.fromDeg)} ${F.num(th.wind.speedKmh)} km/h` : '-' }}</td>
+            <td>{{ th.drift ? `${compass(th.drift.fromDeg)} ${F.num(th.drift.speedKmh)} km/h` : '-' }}</td>
+            <td>{{ coreOffset(th) ?? '-' }}</td>
             <td>{{ circleCell(th) }}</td>
             <td>{{ centredCell(th) }}</td>
           </tr>
@@ -496,17 +496,17 @@ watch(() => props.id, load);
 }
 .hero-text > * { pointer-events: auto; }
 .title-input {
-  font-size: var(--fs-5); font-weight: 750; font-variation-settings: var(--wide); letter-spacing: -0.015em;
-  background: transparent; border: 1px solid transparent; border-radius: 4px; padding: 0 6px; margin-left: -7px;
-  width: min(900px, 100%); color: var(--snow); text-shadow: 0 1px 12px rgba(0, 0, 0, .5);
+  font-size: var(--fs-display); font-weight: var(--w-strong); font-variation-settings: var(--wide); letter-spacing: -0.02em;
+  background: transparent; border: 1px solid transparent; border-radius: var(--r-control); padding: 0 6px; margin-left: -7px;
+  width: min(900px, 100%); color: var(--snow); text-shadow: 0 1px 8px rgba(13, 19, 17, .6);
 }
 .title-input:hover { border-color: rgba(241, 240, 234, .35); }
 .hero-meta { margin: 4px 0 18px; color: var(--snow); opacity: .85; }
 .readout { display: flex; flex-wrap: wrap; gap: 8px 36px; margin: 0; }
 .readout div { display: flex; flex-direction: column-reverse; }
 .readout dt { color: var(--snow); opacity: .78; font-size: var(--fs-1); }
-.readout dd { margin: 0; font-size: 34px; line-height: 1.05; font-weight: 700; font-variation-settings: 'wdth' 125; }
-.readout small { font-size: var(--fs-2); font-weight: 500; margin-left: 4px; opacity: .85; }
+.readout dd { margin: 0; font-size: var(--fs-5); line-height: 1.1; font-weight: var(--w-strong); font-variation-settings: 'wdth' 125; }
+.readout small { font-size: var(--fs-2); font-weight: var(--w-medium); margin-left: 4px; opacity: .85; }
 
 .wrap { width: 100%; max-width: 1120px; margin: 0 auto; padding: 0 20px; }
 .tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: -16px; }
@@ -537,14 +537,14 @@ watch(() => props.id, load);
 dl { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; margin: 0; font-size: 14px; }
 .group dl > dt, .group dl > dd { padding-bottom: 6px; border-bottom: 1px solid var(--rule); }
 dt { color: var(--lichen); }
-dd { margin: 0; text-align: right; font-weight: 600; }
+dd { margin: 0; text-align: right; font-weight: var(--w-medium); }
 .note { font-size: var(--fs-1); color: var(--lichen); margin: 14px 0 0; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
 th { text-align: left; font-weight: 500; color: var(--lichen); font-size: var(--fs-1); padding: 6px 8px; border-bottom: 1px solid var(--control-line); white-space: nowrap; }
 td { padding: 7px 8px; border-bottom: 1px solid var(--rule); }
 tbody tr:hover { background: var(--ground-2); }
-td.strong { font-weight: 700; }
-td.accel { color: var(--lift); font-weight: 600; }
+td.strong { font-weight: var(--w-strong); }
+td.accel { color: var(--lift); font-weight: var(--w-medium); }
 .with-seg .seg { margin-left: auto; font-weight: 400; font-variation-settings: normal; }
 .scroll { max-height: 440px; overflow: auto; }
 .scroll-x { overflow-x: auto; }
@@ -561,7 +561,7 @@ td.accel { color: var(--lift); font-weight: 600; }
   .wrap { padding: 0 16px; }
   .tools { margin-top: -12px; }
   .video-btn { margin-left: 0; flex: 1 1 100%; order: -1; }
-  table { font-size: 12px; }
+  table { font-size: var(--fs-1); }
   .scroll { overflow-x: auto; }
 }
 </style>
